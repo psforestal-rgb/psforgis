@@ -1,0 +1,2104 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GIS Cobertura CR v6.5 (Motor Espacial Robusto)</title>
+
+<!-- ========================================================================= -->
+<!-- ETIQUETAS PWA (PROGRESSIVE WEB APP) -->
+<!-- ========================================================================= -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#2e7d32">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="apple-touch-icon" href="https://www.sirefor.go.cr/images/favicon.ico">
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css"/>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* RESET & BASE */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --primary-h: 145;
+  --primary-s: 65%; --primary-l: 25%;
+  --primary: hsl(var(--primary-h), var(--primary-s), var(--primary-l));
+  --primary-hover: hsl(var(--primary-h), var(--primary-s), 20%);
+  --primary-light: hsl(var(--primary-h), 40%, 94%); 
+  
+  --info: #0277BD;
+  --info-bg: #E1F5FE;
+  --surface: #ffffff;
+  --surface-2: #f8f9fa; 
+  --bg: #eceff1; 
+  --border: #e0e0e0;
+  
+  --text-main: #263238;
+  --text-muted: #546E7A;
+  
+  --danger: #d32f2f; --danger-bg: #fbe9e7;
+  --warn: #f57c00;   --warn-bg: #fff3e0;
+  --success: #2e7d32; --success-bg: #e8f5e9;
+
+  --radius: 8px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.1), 0 4px 6px -2px rgba(0,0,0,0.05);
+  
+  --font-main: 'DM Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --header-height: 56px; 
+  --footer-height: 32px;
+}
+
+:root[data-theme="dark"]{
+  --primary: #4CAF50; 
+  --primary-hover: #66BB6A;
+  --primary-light: rgba(76, 175, 80, 0.15);
+  
+  --info: #29B6F6;
+  --info-bg: rgba(41, 182, 246, 0.15);
+  
+  --surface: #1e293b; 
+  --surface-2: #334155; 
+  --bg: #0f172a; 
+  --border: #475569;
+  
+  --text-main: #f1f5f9;
+  --text-muted: #94a3b8;
+  
+  --danger: #ef5350;
+  --danger-bg: rgba(239, 83, 80, 0.15);
+  --warn: #ffa726;   --warn-bg: rgba(255, 167, 38, 0.15);
+}
+
+html,body{height:100%;font-family:var(--font-main);font-size:14px;color:var(--text-main);background:var(--bg);transition:background .3s ease, color .3s ease;overflow:hidden;
+-webkit-font-smoothing: antialiased;}
+
+button { font-family:var(--font-main); cursor:pointer; border:none; border-radius:var(--radius); padding: 0 16px; height: 36px; font-size:13px; font-weight:500; letter-spacing: 0.3px; transition: all .2s ease; display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+button:active { transform: translateY(1px); }
+button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.btn-primary { background: var(--primary); color: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+.btn-primary:hover { background: var(--primary-hover); box-shadow: 0 4px 8px rgba(0,0,0,0.15); }
+.btn-secondary { background: var(--surface); color: var(--text-main); border: 1px solid var(--border); }
+.btn-secondary:hover { background: var(--surface-2); border-color: var(--text-muted); }
+.btn-danger { background: var(--danger-bg); color: var(--danger); border: 1px solid transparent; }
+.btn-danger:hover { background: var(--danger); color: white; }
+.btn-sm { height: 28px; padding: 0 12px; font-size: 12px; }
+.btn-block { width: 100%; }
+.btn-icon-only { padding: 0; width: 28px; height: 28px; border-radius: 4px; }
+
+input, select, textarea { font-family: var(--font-main); font-size: 13px; padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); color: var(--text-main); width: 100%; transition: border-color .2s, box-shadow .2s; }
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light); }
+label { font-weight: 600; font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; display: block; margin-bottom: 6px; }
+textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); line-height: 1.4; }
+
+#app { display: flex; height: 100vh; width: 100vw; overflow: hidden; }
+#map-container { flex: 1; position: relative; display: flex; flex-direction: column; min-width: 0; }
+#map { flex: 1; background: #ddd; z-index: 1; }
+#map.drawing-mode { cursor: crosshair !important; }
+
+#sidebar { width: 360px; min-width: 300px; max-width: 60vw; display: flex; flex-direction: column; background: var(--surface); border-left: 1px solid var(--border); position: relative; z-index: 20; box-shadow: -2px 0 10px rgba(0,0,0,0.05); transition: width .2s cubic-bezier(0.4, 0, 0.2, 1); }
+#sidebar.fullscreen { width: 100vw; position: absolute; right: 0; top: 0; bottom: 0; border: none; z-index: 9999; max-width: 100%; }
+#sidebar.resizing { transition: none !important; user-select: none; }
+
+#sidebar-header { height: var(--header-height); padding: 0 20px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand h2 { color: var(--text-main); font-size: 16px; font-weight: 700; letter-spacing: -0.3px; margin: 0; }
+.badge { background: var(--primary-light); color: var(--primary); font-size: 10px; font-weight: 700; padding: 2px 8px; border-radius: 12px; letter-spacing: 0.5px; }
+
+#topbar { display: flex; align-items: center; padding: 0 16px; background: var(--surface); border-bottom: 1px solid var(--border); height: 48px; gap: 12px; }
+.tab { height: 100%; display: flex; align-items: center; gap: 8px; font-weight: 500; font-size: 13px; color: var(--text-muted); cursor: pointer; border-bottom: 2px solid transparent; transition: all .2s; padding: 0 4px; }
+.tab:hover { color: var(--primary); }
+.tab.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.tab-icon { font-size: 16px; opacity: 0.8; }
+
+#content { flex: 1; overflow-y: auto; padding: 20px; background: var(--bg); }
+#content::-webkit-scrollbar { width: 6px; }
+#content::-webkit-scrollbar-thumb { background-color: #ccc; border-radius: 3px; }
+#content::-webkit-scrollbar-track { background: transparent; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; margin-bottom: 16px; box-shadow: var(--shadow-sm); transition: transform 0.2s, box-shadow 0.2s; }
+.card:hover { box-shadow: var(--shadow-md); }
+.card h3 { font-size: 13px; font-weight: 700; color: var(--text-main); margin-bottom: 16px; text-transform: uppercase; letter-spacing: 0.5px; display: flex; align-items: center; gap: 8px; border-left: 3px solid var(--primary); padding-left: 10px; }
+
+.wizard-header { margin-bottom: 20px; }
+.wizard-progress { display: flex; gap: 4px; margin-bottom: 12px; align-items: center; }
+.progress-step { flex: 1; height: 6px; background: var(--border); border-radius: 3px; transition: all 0.3s ease; }
+.progress-step.active { background: var(--primary); }
+.progress-text { display: flex; justify-content: space-between; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+
+.wizard-cards-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 12px; }
+.wizard-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 8px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.wizard-card:hover { border-color: var(--primary); background: var(--surface-2); transform: translateY(-2px); }
+.wizard-card.selected { background: var(--primary-light); border-color: var(--primary); color: var(--primary); font-weight: 700; box-shadow: inset 0 0 0 2px var(--primary); }
+.wc-icon { font-size: 24px; margin-bottom: 4px; }
+.wc-label { font-size: 12px; line-height: 1.3; }
+
+.wizard-nav { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+.back-btn { color: var(--text-muted); font-size: 12px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-radius: 4px; }
+.back-btn:hover { background: var(--surface-2); color: var(--text-main); }
+.sub-tabs.hidden { display: none; }
+.legacy-input-container { display: none; } 
+.legacy-input-container.active { display: block; animation: fadeIn 0.3s; }
+
+.inventory-summary { display: flex; gap: 8px; margin-bottom: 12px; }
+.inv-badge { flex: 1; padding: 6px 10px; background: var(--info-bg); color: var(--info); border: 1px solid transparent; border-radius: 20px; text-align: center; font-size: 11px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+.inv-badge:hover { filter: brightness(0.95); }
+.inv-badge.active { background: var(--info); color: white; box-shadow: var(--shadow-sm); }
+
+.data-list { max-height: 200px; overflow-y: auto; background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius); margin-bottom: 12px; display: none; }
+.data-list.show { display: block; }
+.data-item { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); color: var(--text-muted); display: flex; justify-content: space-between; align-items: center; }
+.data-item:last-child { border-bottom: none; }
+.item-controls { display: flex; gap: 8px; }
+#manual-status, #import-status { font-size: 12px; font-weight: 500; margin-top: 10px; padding: 8px; border-radius: 4px; background: var(--surface-2); border-left: 3px solid var(--border); min-height: 34px; display: flex; align-items: center; }
+
+#status-bar { height: var(--footer-height); background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(5px); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-family: var(--font-mono); font-size: 11px; color: var(--text-main); z-index: 1000; box-shadow: 0 -2px 10px rgba(0,0,0,0.05); }
+:root[data-theme="dark"] #status-bar { background: rgba(30, 41, 59, 0.95); }
+.status-item { display: flex; gap: 12px; align-items: center; }
+
+.scale-input-wrapper { display: flex; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; transition: border-color 0.2s; }
+.scale-input-wrapper:focus-within { border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+#numeric-scale { background: transparent; border: none; width: 60px; padding: 0; font-family: var(--font-mono); font-size: 11px; font-weight: 700; color: var(--primary); text-align: right; height: auto; }
+#numeric-scale:focus { box-shadow: none; }
+
+#map-controls-custom { position: absolute; top: 16px; left: 16px; z-index: 1000; display: flex; flex-direction: column; gap: 8px; }
+.map-btn { width: 36px; height: 36px; background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(4px); border: 1px solid rgba(0,0,0,0.1); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; color: var(--text-main); font-size: 18px; box-shadow: var(--shadow-md); transition: all 0.2s; }
+:root[data-theme="dark"] .map-btn { background: rgba(30, 41, 59, 0.8); border-color: rgba(255,255,255,0.1); }
+.map-btn:hover { background: var(--primary); color: white; transform: translateY(-1px); }
+
+#drawing-tooltip { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: var(--surface); padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 12px; pointer-events: none; z-index: 2000; display: none; box-shadow: var(--shadow-lg); }
+
+#layers-panel { position: absolute; top: 16px; left: 60px; width: 320px; max-height: 80vh; background: var(--surface); border-radius: var(--radius); box-shadow: var(--shadow-lg); z-index: 2000; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); transition: opacity 0.2s, transform 0.2s; }
+#layers-panel.hidden { display: none; }
+#layers-panel-header { padding: 12px 16px; background: var(--surface-2); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+#layers-panel-header h3 { margin: 0; font-size: 13px; font-weight: 700; text-transform: uppercase; color: var(--text-main); }
+#layers-panel-content { padding: 0; overflow-y: auto; flex: 1; }
+.layer-section { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+.layer-section:last-child { border-bottom: none; }
+.layer-section h4 { margin: 0 0 10px 0; font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; }
+
+.contrast-tiles { filter: brightness(0.6) contrast(1.5) grayscale(1); }
+:root[data-theme="dark"] .contrast-tiles { filter: invert(1) brightness(1.5); }
+.leaflet-control-layers { display: none !important; }
+.leaflet-control-zoom-snap { font-size: 18px !important; font-weight: bold; display: flex !important; align-items: center; justify-content: center; }
+
+.panel { display: none; animation: fadeIn 0.25s ease-out; }
+.panel.active { display: block; }
+
+/* ESTILOS PARA TABLAS DE RESULTADOS */
+.report-section { margin-bottom: 30px; }
+.report-section h4 { color: var(--primary); font-size: 14px; margin-bottom: 12px; border-bottom: 2px solid var(--border); padding-bottom: 4px; }
+.report-table-wrapper { overflow-x: auto; margin-bottom: 16px; border: 1px solid var(--border); border-radius: var(--radius); }
+.report-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+.report-table th, .report-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); white-space: nowrap; }
+.report-table th { background: var(--surface-2); font-weight: 700; color: var(--text-main); position: sticky; top: 0; z-index: 10;}
+.report-table tr:hover { background: var(--primary-light); }
+.report-table td:last-child, .report-table th:last-child { border-right: none; }
+.spinner-container { display: flex; flex-direction: column; align-items: center; padding: 40px; color: var(--text-muted); text-align: center; }
+.loader { border: 4px solid var(--surface-2); border-top: 4px solid var(--primary); border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin-bottom: 16px;}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+#resizer-handle {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 4px;
+  cursor: col-resize;
+  z-index: 100;
+}
+#resizer-handle:hover { background: var(--primary-light); }
+
+@media(max-width:900px){
+  #sidebar{width:100%;min-width:auto;height:45vh;border-left:none;border-top:1px solid var(--border)}
+  #resizer-handle { cursor: row-resize; top: -4px; bottom: auto; height: 8px; width: 100%; left: 0; right: 0; }
+  #app{flex-direction:column}
+  #layers-panel { position: absolute; top: auto; bottom: 0; left: 0; right: 0; width: 100%; max-height: 60vh; border-radius: 12px 12px 0 0; }
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="map-container">
+    <div id="map">
+        <div id="drawing-tooltip">Modo Dibujo Activo</div>
+        <div id="map-controls-custom">
+            <button class="map-btn" onclick="toggleLayersPanel()" title="Capas">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            </button>
+        </div>
+        
+        <div id="layers-panel" class="hidden">
+            <div id="layers-panel-header">
+                <h3>Capas del Mapa</h3>
+                <button class="btn-sm btn-secondary" onclick="toggleLayersPanel()" style="padding:4px 8px;">✕</button>
+            </div>
+            <div style="padding: 10px; border-bottom: 1px solid var(--border); background: var(--surface-2);">
+                <input type="text" id="layer-search" placeholder="Buscar capa..." onkeyup="filterLayers(this.value)" style="padding: 6px 10px; font-size: 12px;">
+            </div>
+            <div id="layers-panel-content"></div>
+        </div>
+    </div>
+    
+    <div id="status-bar">
+        <div class="status-item">
+            <span id="coord-wgs" title="WGS84">Lat: - Lon: -</span>
+            <span style="opacity:0.3">|</span>
+            <span id="coord-crtm" title="CRTM05">E: - N: -</span>
+        </div>
+        <div class="status-item">
+            <span>Escala 1:</span>
+            <div class="scale-input-wrapper">
+                <input id="numeric-scale" value="-" title="Escriba la escala y presione Enter (ej: 5000)">
+            </div>
+        </div>
+    </div>
+  </div>
+
+  <div id="sidebar">
+    <div id="resizer-handle"></div>
+    <div id="sidebar-header">
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <h2>GIS Cobertura CR</h2>
+      </div>
+      <div style="display:flex;gap:12px;align-items:center">
+          <span class="badge">v6.5+</span>
+          <button class="btn-secondary btn-icon-only" onclick="toggleTheme()" title="Cambiar Tema">◑</button>
+      </div>
+    </div>
+    
+    <div id="topbar">
+      <div class="tab active" data-tab="data" onclick="switchMainTab('data')"><span class="tab-icon">📁</span> Gestión Datos</div>
+      <div class="tab" data-tab="results" onclick="switchMainTab('results')"><span class="tab-icon">📊</span> Resultados</div>
+      <div class="tab" data-tab="config" onclick="switchMainTab('config')"><span class="tab-icon">⚙</span> Configuración</div>
+    </div>
+
+    <div id="content">
+      <div id="panel-data" class="panel active">
+          <div id="wizard-container">
+              <div class="wizard-header">
+                  <div class="wizard-nav">
+                      <div class="back-btn" id="wizard-back" onclick="prevStep()" style="display:none"><span>←</span> Volver</div>
+                      <div class="progress-text"><span id="step-text">Paso 1/3</span></div>
+                  </div>
+                  <div class="wizard-progress">
+                      <div class="progress-step active" id="p-step-1"></div>
+                      <div class="progress-step" id="p-step-2"></div>
+                      <div class="progress-step" id="p-step-3"></div>
+                  </div>
+                  <h3 id="step-title" style="font-size:14px; margin:0;">Seleccione Método</h3>
+              </div>
+
+              <div id="wizard-step-1" class="wizard-step-content">
+                  <div class="wizard-cards-grid">
+                      <div class="wizard-card" onclick="selectMethod('manual')"><span class="wc-icon">✏️</span><span class="wc-label">Dibujar<br>Geometría</span></div>
+                      <div class="wizard-card" onclick="selectMethod('import')"><span class="wc-icon">📂</span><span class="wc-label">Importar<br>Archivo</span></div>
+                      <div class="wizard-card" onclick="selectMethod('paste')"><span class="wc-icon">📋</span><span class="wc-label">Pegar<br>Coordenadas</span></div>
+                  </div>
+                  <p style="font-size:11px; color:var(--text-muted); margin-top:12px; text-align:center;">Seleccione cómo desea ingresar los datos al mapa.</p>
+              </div>
+
+              <div id="wizard-step-2" class="wizard-step-content" style="display:none;">
+                  <div class="wizard-cards-grid">
+                      <div class="wizard-card" onclick="selectGeometry('point')"><span class="wc-icon">●</span><span class="wc-label">Punto</span></div>
+                      <div class="wizard-card" onclick="selectGeometry('line')"><span class="wc-icon">╱</span><span class="wc-label">Línea</span></div>
+                      <div class="wizard-card" onclick="selectGeometry('polygon')"><span class="wc-icon">⬡</span><span class="wc-label">Polígono</span></div>
+                  </div>
+                  <p style="font-size:11px; color:var(--text-muted); margin-top:12px; text-align:center;">¿Qué tipo de elemento desea crear?</p>
+              </div>
+
+              <div id="wizard-step-3" class="wizard-step-content" style="display:none;">
+                  <div id="active-form-container"></div>
+                  <div style="margin-top:24px; border-top:1px dashed var(--border); padding-top:16px; text-align:center;">
+                      <button class="btn-secondary btn-block" onclick="resetWizard()" style="font-size:12px;">↩ Iniciar Nuevo Elemento</button>
+                  </div>
+              </div>
+          </div>
+
+          <div id="legacy-panels-storage" style="display:none;">
+              <div id="input-manual" class="legacy-input-container">
+                  <div class="card">
+                      <div class="geo-selector" style="display:none">
+                          <div class="geo-option active" onclick="setGeoType('point')" id="geo-manual-point"><span class="geo-icon">●</span>Punto</div>
+                          <div class="geo-option" onclick="setGeoType('line')" id="geo-manual-line"><span class="geo-icon">╱</span>Línea</div>
+                          <div class="geo-option" onclick="setGeoType('polygon')" id="geo-manual-polygon"><span class="geo-icon">⬡</span>Polígono</div>
+                      </div>
+                      <div style="display: grid; grid-template-columns: 1fr 100px; gap: 12px; margin-bottom: 12px;">
+                          <div><label>ID / Etiqueta</label><input id="man-id" placeholder="Ej: P1"></div>
+                          <div>
+                              <label>EPSG</label>
+                              <select id="man-epsg"><option value="8908" selected>8908 (CRTM05)</option><option value="5367">5367 (CR05)</option><option value="4326">4326 (WGS84)</option></select>
+                          </div>
+                      </div>
+                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                          <div><label>X / Longitud</label><input id="man-x" type="number" step="any" placeholder="Coord X"></div>
+                          <div><label>Y / Latitud</label><input id="man-y" type="number" step="any" placeholder="Coord Y"></div>
+                      </div>
+                      <div class="actions">
+                          <div style="display:flex; gap:12px; width:100%">
+                              <button id="btn-add-vertex" class="btn-primary btn-block" onclick="manualAction()">➕ Agregar</button>
+                              <button id="btn-draw-map" class="btn-secondary btn-block" onclick="toggleDrawingMode()">✏️ Dibujar</button>
+                          </div>
+                          <div id="poly-controls" style="display:none; width:100%; gap:8px; margin-top:8px">
+                               <button class="btn-primary btn-block" onclick="finishGeometry()">🏁 Finalizar</button>
+                               <button class="btn-danger" style="width:48px" onclick="cancelGeometry()" title="Cancelar">✕</button>
+                          </div>
+                      </div>
+                      <div id="manual-status"></div>
+                      <div style="margin-top:12px">
+                          <input type="checkbox" id="man-axis-swap" checked style="width:auto; margin-right:8px;">
+                          <label for="man-axis-swap" style="display:inline; font-weight:400; text-transform:none;">Corregir ejes invertidos</label>
+                      </div>
+                  </div>
+              </div>
+
+              <div id="input-import" class="legacy-input-container">
+                  <div class="card">
+                      <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px; line-height:1.5;">Soporta: <strong>.ZIP (SHP)</strong>, <strong>.GPX</strong>, <strong>.GEOJSON</strong> y <strong>.KML</strong>.</p>
+                      <div style="margin-bottom: 12px;"><input type="file" id="file-upload" accept=".zip,.gpx,.json,.geojson,.kml"></div>
+                      <div style="display: grid; grid-template-columns: 100px 1fr; gap: 12px;">
+                          <div><label>EPSG Origen</label><select id="file-epsg"><option value="8908">8908</option><option value="5367">5367</option><option value="4326">4326</option></select></div>
+                          <button class="btn-primary" style="align-self: flex-end; height: 38px;" onclick="importUniversalFile()">📥 Cargar Archivo</button>
+                      </div>
+                      <div id="import-status"></div>
+                  </div>
+              </div>
+
+              <div id="input-paste" class="legacy-input-container">
+                  <div class="card">
+                      <textarea id="paste-area" placeholder="Formato: ID, X, Y (separado por tabulador o coma)"></textarea>
+                      <div style="display: grid; grid-template-columns: 100px 1fr; gap: 12px; margin-top: 16px;">
+                          <div><select id="paste-epsg"><option value="8908">8908</option><option value="5367">5367</option><option value="4326">4326</option></select></div>
+                          <button class="btn-primary" onclick="processPaste()">Procesar Texto</button>
+                      </div>
+                  </div>
+               </div>
+          </div>
+
+          <div class="card" style="padding:16px; margin-top:20px;">
+              <h3 style="margin-bottom:10px;">Inventario de Capas</h3>
+              <div class="inventory-summary">
+                  <div class="inv-badge" id="badge-points" onclick="toggleList('points')">0 Puntos</div>
+                  <div class="inv-badge" id="badge-lines" onclick="toggleList('lines')">0 Líneas</div>
+                  <div class="inv-badge" id="badge-polys" onclick="toggleList('polys')">0 Polígonos</div>
+              </div>
+              <div id="list-points" class="data-list"></div>
+              <div id="list-lines" class="data-list"></div>
+              <div id="list-polys" class="data-list"></div>
+              <div class="actions" style="margin-top:16px; display:flex; gap:12px;">
+                  <button class="btn-secondary" style="flex:1" onclick="clearAllData()">🗑 Limpiar</button>
+                  <button class="btn-primary" style="flex:1.5" onclick="switchToResults()">🔍 Analizar Todo</button>
+              </div>
+          </div>
+      </div>
+
+      <div id="panel-results" class="panel">
+          <div class="card">
+              <h3>Resultados del Análisis</h3>
+              <div id="report-container"><p style="color:var(--text-muted); text-align:center; padding:30px 0;">No hay resultados disponibles.</p></div>
+              <div class="actions"><button class="btn-primary btn-block" onclick="downloadReport()" id="btn-download-report" style="display:none;">📥 Descargar Reporte Completo (ZIP/XLSX)</button></div>
+          </div>
+      </div>
+
+      <div id="panel-config" class="panel">
+          <div class="card">
+              <h3>Configuración de Capas WFS</h3>
+              <p style="font-size:11px; margin-bottom: 12px; color: var(--text-muted)">Habilita las capas que quieres incluir en el Análisis Espacial. Verifica el CRS, usualmente es EPSG:4326.</p>
+              <div id="config-list"></div>
+              <div class="new-layer-form" style="margin-top:24px; padding-top: 16px; border-top: 1px dashed var(--border);">
+                  <h4 style="font-size: 12px; margin-bottom: 12px;">Agregar Nueva Capa</h4>
+                  <div style="display: grid; grid-template-columns: 1fr 100px; gap: 12px; margin-bottom: 8px;">
+                      <input id="new-name" placeholder="Nombre de la capa">
+                      <div><select id="new-srs"><option value="EPSG:4326">4326</option><option value="EPSG:8908">8908</option><option value="EPSG:5367">5367</option></select></div>
+                  </div>
+                  <div style="margin-bottom:8px"><input id="new-url" placeholder="URL del servicio WFS (ej. http://.../wfs)"></div>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px;">
+                    <input id="new-type" placeholder="TypeName">
+                    <input id="new-attr" placeholder="Atributo">
+                  </div>
+                  <button class="btn-primary btn-block" onclick="addNewLayer()">➕ Agregar Capa Personalizada</button>
+              </div>
+              <div class="actions" style="margin-top:20px; display:flex; gap:12px;">
+                  <button class="btn-secondary" style="flex:1" onclick="resetConfig()">Reset Default</button>
+                  <button class="btn-primary" style="flex:1" onclick="saveConfig()">Guardar</button>
+              </div>
+          </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- SCRIPTS EXTERNOS -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jsts/2.9.3/jsts.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.4/shp.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+<script>
+// ===================== CORE SETUP =====================
+proj4.defs("EPSG:8908", "+proj=tmerc +lat_0=0 +lon_0=-84 +k=0.9999 +x_0=500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
+proj4.defs("EPSG:5367", "+proj=tmerc +lat_0=0 +lon_0=-84 +k=0.9999 +x_0=500000 +y_0=0 +ellps=WGS84 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
+proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
+
+let map, layerControl;
+let layers = {};
+let activeWmsLayers = {}; 
+let data = { points: [], lines: [], polygons: [] };
+let tempGeom = { type: 'point', vertices: [], id: '' };
+let appState = { inputMethod: 'manual', geoType: 'point', isDrawing: false };
+let snapTimeout;
+let listState = JSON.parse(localStorage.getItem('giscr_list_state') || '{"points":false,"lines":false,"polys":false}');
+
+// VARIABLE GLOBAL PARA EXPORTACIÓN
+let globalAnalysisResults = null;
+
+let wizardState = { step: 1, method: null, geoType: null };
+
+function renderWizard() {
+    document.getElementById('wizard-step-1').style.display = 'none'; 
+    document.getElementById('wizard-step-2').style.display = 'none'; 
+    document.getElementById('wizard-step-3').style.display = 'none';
+    
+    document.getElementById('p-step-1').className = `progress-step ${wizardState.step >= 1 ? 'active' : ''}`;
+    document.getElementById('p-step-2').className = `progress-step ${wizardState.step >= 2 ? 'active' : ''}`;
+    document.getElementById('p-step-3').className = `progress-step ${wizardState.step >= 3 ? 'active' : ''}`;
+    
+    const backBtn = document.getElementById('wizard-back'); 
+    const title = document.getElementById('step-title'); 
+    const stepText = document.getElementById('step-text');
+    
+    stepText.innerText = `Paso ${wizardState.step}/3`; 
+    backBtn.style.display = wizardState.step > 1 ? 'flex' : 'none';
+    
+    if (wizardState.step === 1) { 
+        document.getElementById('wizard-step-1').style.display = 'block'; 
+        title.innerText = 'Seleccione Método';
+    } else if (wizardState.step === 2) { 
+        document.getElementById('wizard-step-2').style.display = 'block'; 
+        title.innerText = 'Tipo de Geometría';
+    } else if (wizardState.step === 3) { 
+        document.getElementById('wizard-step-3').style.display = 'block'; 
+        title.innerText = 'Ingrese Datos'; 
+        renderStep3Content(); 
+    }
+}
+
+function selectMethod(method) { 
+    wizardState.method = method; 
+    appState.inputMethod = method; 
+    if (method === 'import') { wizardState.step = 3; } else { wizardState.step = 2; } 
+    renderWizard(); 
+}
+
+function selectGeometry(type) { 
+    wizardState.geoType = type; 
+    setGeoType(type); 
+    wizardState.step = 3; 
+    renderWizard(); 
+}
+
+function prevStep() { 
+    if (wizardState.step === 3) { 
+        if (wizardState.method === 'import') wizardState.step = 1; else wizardState.step = 2; 
+    } else if (wizardState.step === 2) { 
+        wizardState.step = 1; 
+    } 
+    renderWizard(); 
+}
+
+function renderStep3Content() {
+    const container = document.getElementById('active-form-container'); 
+    const storage = document.getElementById('legacy-panels-storage');
+    while (container.firstChild) { 
+        if(container.firstChild.style) container.firstChild.style.display = 'none'; 
+        storage.appendChild(container.firstChild); 
+    }
+    let legacyId = '';
+    if (wizardState.method === 'manual') legacyId = 'input-manual'; 
+    else if (wizardState.method === 'import') legacyId = 'input-import'; 
+    else if (wizardState.method === 'paste') legacyId = 'input-paste';
+    
+    const original = document.getElementById(legacyId);
+    if (original) { 
+        original.style.display = 'block'; 
+        container.appendChild(original); 
+        if (wizardState.method !== 'import') setGeoType(wizardState.geoType); 
+    }
+}
+
+function resetWizard() {
+    const container = document.getElementById('active-form-container'); 
+    const storage = document.getElementById('legacy-panels-storage');
+    while (container.firstChild) { 
+        if(container.firstChild.style) container.firstChild.style.display = 'none'; 
+        storage.appendChild(container.firstChild); 
+    }
+    wizardState = { step: 1, method: null, geoType: null }; 
+    renderWizard();
+}
+
+const DEFAULT_LAYERS = [
+  { id: 'fona2000', name: 'FONAFIFO 2000', wfs: 'https://www.sirefor.go.cr/GeoserviciosSIREFOR/wfs', type: 'cobertura_forestal2000', attr: 'USO_COBERT', srs: 'EPSG:4326', enabled: true },
+  { id: 'fona2005', name: 'FONAFIFO 2005', wfs: 'https://www.sirefor.go.cr/GeoserviciosSIREFOR/wfs', type: 'cobertura_forestal2005', attr: 'cobertura', srs: 'EPSG:4326', enabled: true },
+  { id: 'pne2021', name: 'COBERTURA FORESTAL 2021', wfs: 'https://geos1pne.sirefor.go.cr/wfs', type: 'PNE:cobertura_forestal_2021', attr: 'Clase', srs: 'EPSG:8908', enabled: true },
+  { id: 'pne2023', name: 'COBERTURA FORESTAL 2023', wfs: 'https://geos1pne.sirefor.go.cr/wfs', type: 'PNE:cobertura_forestal_2023', attr: 'Clase', srs: 'EPSG:8908', enabled: true }
+];
+let config = JSON.parse(localStorage.getItem('giscr_config') || JSON.stringify(DEFAULT_LAYERS));
+
+// ===================== INITIALIZATION =====================
+document.addEventListener('DOMContentLoaded', () => {
+    initMap(); 
+    initTheme(); 
+    renderConfig(); 
+    loadDataFromStorage(); 
+    initScaleInput(); 
+    initResizer(); 
+    renderWizard(); 
+    
+    document.addEventListener('keydown', (e) => {
+        if (!appState.isDrawing) return;
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if ((appState.geoType === 'line' || appState.geoType === 'polygon') && tempGeom.vertices.length > 0) {
+                tempGeom.vertices.pop(); 
+                drawTempGeom();
+                const statusEl = document.getElementById('manual-status'); 
+                if(statusEl) statusEl.innerText = `Vértices: ${tempGeom.vertices.length}`;
+            }
+        }
+        if (e.key === 'Escape') { 
+            cancelGeometry(); 
+            if(appState.isDrawing) toggleDrawingMode(); 
+        }
+        if (e.key === 'Enter') finishGeometry();
+    });
+});
+
+function initMap() {
+    if(map) map.remove();
+    map = L.map('map', { zoomControl: false, zoomSnap: 0, zoomDelta: 0.25, maxZoom: 22 }).setView([9.95, -84.1], 8);
+    
+    map.createPane('wmsPane'); map.getPane('wmsPane').style.zIndex = 300; 
+    map.createPane('refPane'); map.getPane('refPane').style.zIndex = 500; map.getPane('refPane').style.pointerEvents = 'none';
+    map.createPane('labels'); map.getPane('labels').style.zIndex = 550; map.getPane('labels').style.pointerEvents = 'none';
+    
+    L.control.zoom({ position: 'topright' }).addTo(map);
+    L.control.scale({ position: 'bottomleft', imperial: false, maxWidth: 150 }).addTo(map);
+    
+    const basemaps = {
+        "Satélite (Esri)": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxNativeZoom:19,maxZoom:22,attribution:'Esri', crossOrigin: 'anonymous'}),
+        "Relieve (OpenTopo)": L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {maxNativeZoom:17,maxZoom:22,attribution:'OTM', crossOrigin: 'anonymous'}),
+        "Calles (OSM)": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxNativeZoom:19,maxZoom:22,attribution:'OSM', crossOrigin: 'anonymous'}),
+        "Oscuro (Carto)": L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxNativeZoom:19,maxZoom:22,attribution:'CartoDB', crossOrigin: 'anonymous'})
+    };
+    basemaps["Satélite (Esri)"].addTo(map);
+
+    const esriRoads = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', { pane: 'refPane', maxNativeZoom: 19, maxZoom: 22, className: 'contrast-tiles', crossOrigin: 'anonymous' });
+    const esriBoundaries = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', { pane: 'refPane', maxNativeZoom: 19, maxZoom: 22, crossOrigin: 'anonymous' });
+    const cartoLabels = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager_only_labels/{z}/{x}/{y}{r}.png', { pane: 'refPane', maxNativeZoom: 19, maxZoom: 22, crossOrigin: 'anonymous' });
+    const combinedRefLayer = L.layerGroup([esriRoads, esriBoundaries, cartoLabels]);
+
+    layers.points = L.featureGroup().addTo(map); 
+    layers.lines = L.featureGroup().addTo(map); 
+    layers.polys = L.featureGroup().addTo(map); 
+    layers.temp = L.featureGroup().addTo(map);
+    
+    layerControl = L.control.layers(basemaps, { "Puntos": layers.points, "Líneas": layers.lines, "Polígonos": layers.polys, "Referencias (Caminos/Etiquetas)": combinedRefLayer }, { position: 'topright' }).addTo(map);
+    combinedRefLayer.addTo(map);
+    
+    window.__basemaps = basemaps; 
+    window.__overlays = { "Puntos": layers.points, "Líneas": layers.lines, "Polígonos": layers.polys, "Referencias": combinedRefLayer };
+    
+    updateMapWmsLayers(); 
+
+    const ZoomSnapControl = L.Control.extend({ 
+      options: { position: 'topright' }, 
+      onAdd: function (map) { 
+        const container = L.DomUtil.create('div', 'leaflet-bar leaflet-control leaflet-control-zoom-snap'); 
+        const btn = L.DomUtil.create('a', '', container); 
+        btn.href = '#'; btn.title = 'Zoom Total'; btn.innerHTML = '◎'; btn.style.width = '30px'; btn.style.height = '30px'; btn.style.lineHeight = '30px'; btn.style.fontSize = '20px'; 
+        btn.onclick = function(e) { e.preventDefault(); fitMapToAll(true); }; 
+        return container; 
+      } 
+    });
+    map.addControl(new ZoomSnapControl());
+
+    map.on('moveend zoomend', () => updateScaleControl());
+    map.on('mousemove', e => { 
+        const p8908 = proj4("EPSG:4326", "EPSG:8908", [e.latlng.lng, e.latlng.lat]); 
+        document.getElementById('coord-wgs').innerText = `Lat: ${e.latlng.lat.toFixed(5)} Lon: ${e.latlng.lng.toFixed(5)}`; 
+        document.getElementById('coord-crtm').innerText = `E: ${p8908[0].toFixed(2)} N: ${p8908[1].toFixed(2)}`; 
+    });
+    map.on('zoomend', () => { 
+        clearTimeout(snapTimeout); 
+        if (document.activeElement.id !== 'numeric-scale') snapTimeout = setTimeout(() => { snapToRoundScale(); }, 800); 
+    });
+    map.on('click', onMapClick); 
+    map.on('dblclick', onMapDblClick);
+}
+
+// UI & Data helpers
+function toggleLayersPanel() { 
+    const p = document.getElementById('layers-panel'); 
+    p.classList.toggle('hidden'); 
+    if (!p.classList.contains('hidden')) { 
+        renderLayersPanel(); 
+        L.DomEvent.disableScrollPropagation(p); 
+        L.DomEvent.disableClickPropagation(p); 
+    } 
+}
+
+function renderLayersPanel() { 
+    const container = document.getElementById('layers-panel-content'); 
+    container.innerHTML = ''; 
+    const createSection = (title) => { 
+        const d = document.createElement('div'); 
+        d.className = 'layer-section'; 
+        const h = document.createElement('h4'); 
+        h.innerText = title; 
+        d.appendChild(h); 
+        return d; 
+    }; 
+    const baseSec = createSection('Mapa Base'); 
+    for (const [name, layer] of Object.entries(window.__basemaps)) { 
+        const div = document.createElement('div'); 
+        div.className = 'layer-item'; 
+        div.style.display = 'flex';
+        div.style.alignItems = 'center';
+        div.style.marginBottom = '6px';
+        const input = document.createElement('input'); 
+        input.type = 'radio'; 
+        input.name = 'basemap'; 
+        input.style.width = 'auto';
+        input.style.marginRight = '8px';
+        if (map.hasLayer(layer)) input.checked = true; 
+        input.onchange = () => changeBasemap(name); 
+        const label = document.createElement('label');
+        label.style.cursor = 'pointer';
+        label.style.marginBottom = '0';
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(name));
+        div.appendChild(label);
+        baseSec.appendChild(div); 
+    } 
+    container.appendChild(baseSec); 
+    
+    const ovSec = createSection('Referencias y Datos'); 
+    for (const [name, layer] of Object.entries(window.__overlays)) { 
+        const div = document.createElement('div'); 
+        div.style.display = 'flex';
+        div.style.justifyContent = 'space-between';
+        div.style.alignItems = 'center';
+        div.style.marginBottom = '8px';
+        
+        const label = document.createElement('span'); 
+        label.innerText = name; 
+        
+        const chk = document.createElement('input'); 
+        chk.type = 'checkbox'; 
+        chk.style.width = 'auto';
+        if (map.hasLayer(layer)) chk.checked = true; 
+        chk.onchange = (e) => toggleOverlay(name, e.target.checked); 
+        
+        div.appendChild(label); 
+        div.appendChild(chk); 
+        ovSec.appendChild(div); 
+    } 
+    container.appendChild(ovSec); 
+    
+    const wmsSec = createSection('Coberturas WMS'); 
+    let wmsOpacity = {}; 
+    try { wmsOpacity = JSON.parse(localStorage.getItem('giscr_wms_opacity') || '{}'); } catch(e){} 
+    
+    config.forEach(c => { 
+        if (!c.enabled) return; 
+        const layer = activeWmsLayers[c.id]; 
+        if (!layer) return; 
+        
+        const wrapper = document.createElement('div'); 
+        wrapper.style.marginBottom = '12px'; 
+        
+        const itemDiv = document.createElement('div'); 
+        itemDiv.style.display = 'flex';
+        itemDiv.style.justifyContent = 'space-between';
+        itemDiv.style.marginBottom = '4px';
+        
+        const txtLabel = document.createElement('span'); 
+        txtLabel.innerText = c.name; 
+        
+        const chk = document.createElement('input'); 
+        chk.type = 'checkbox'; 
+        chk.style.width = 'auto';
+        if (map.hasLayer(layer)) chk.checked = true; 
+        chk.onchange = (e) => toggleWms(c.id, e.target.checked); 
+        
+        itemDiv.appendChild(txtLabel); 
+        itemDiv.appendChild(chk); 
+        
+        const opacityDiv = document.createElement('div'); 
+        if (!map.hasLayer(layer)) { 
+            opacityDiv.style.opacity = '0.5'; 
+            opacityDiv.style.pointerEvents = 'none'; 
+        } 
+        const opLabel = document.createElement('div'); 
+        opLabel.style.fontSize = '10px'; 
+        opLabel.style.color = 'var(--text-muted)'; 
+        opLabel.innerText = 'Opacidad: ' + (wmsOpacity[c.id] ? Math.round(wmsOpacity[c.id]*100) : 75) + '%'; 
+        
+        const opRange = document.createElement('input'); 
+        opRange.type = 'range'; 
+        opRange.min = '0'; 
+        opRange.max = '100'; 
+        opRange.value = wmsOpacity[c.id] !== undefined ? wmsOpacity[c.id] * 100 : 75; 
+        opRange.oninput = (e) => {
+            setWmsOpacity(c.id, e.target.value);
+            opLabel.innerText = 'Opacidad: ' + e.target.value + '%';
+        }; 
+        
+        opacityDiv.appendChild(opLabel); 
+        opacityDiv.appendChild(opRange); 
+        wrapper.appendChild(itemDiv); 
+        wrapper.appendChild(opacityDiv); 
+        wmsSec.appendChild(wrapper); 
+    }); 
+    container.appendChild(wmsSec); 
+}
+
+function filterLayers(text) { 
+    const term = text.toLowerCase(); 
+    const items = document.querySelectorAll('.layer-item, .layer-item-wms'); 
+    items.forEach(el => { 
+        const label = el.textContent.toLowerCase(); 
+        el.style.display = label.includes(term) ? 'flex' : 'none'; 
+        if (el.className.includes('layer-item-wms')) { 
+            el.style.display = label.includes(term) ? 'block' : 'none'; 
+        } 
+    }); 
+}
+
+window.changeBasemap = (name) => { 
+    for (const l of Object.values(window.__basemaps)) map.removeLayer(l); 
+    map.addLayer(window.__basemaps[name]); 
+};
+
+window.toggleOverlay = (name, active) => { 
+    const layer = window.__overlays[name]; 
+    if (active) map.addLayer(layer); else map.removeLayer(layer); 
+};
+
+window.toggleWms = (id, active) => { 
+    const layer = activeWmsLayers[id]; 
+    if (active) { 
+        map.addLayer(layer); 
+        let wmsOpacity = {}; 
+        try { wmsOpacity = JSON.parse(localStorage.getItem('giscr_wms_opacity') || '{}'); } catch(e){} 
+        const defOp = wmsOpacity[id] !== undefined ? wmsOpacity[id] : 0.75; 
+        layer.setOpacity(defOp); 
+    } else { 
+        map.removeLayer(layer); 
+    } 
+    renderLayersPanel(); 
+};
+
+window.setWmsOpacity = (id, val) => { 
+    const layer = activeWmsLayers[id]; 
+    if (layer) layer.setOpacity(val / 100); 
+    let wmsOpacity = {}; 
+    try { wmsOpacity = JSON.parse(localStorage.getItem('giscr_wms_opacity') || '{}'); } catch(e){} 
+    wmsOpacity[id] = val / 100; 
+    localStorage.setItem('giscr_wms_opacity', JSON.stringify(wmsOpacity)); 
+};
+
+const wmsLayerMeta = {};
+
+function buildWmsUrlFromWfs(wfsUrl) { 
+    let wmsUrl = wfsUrl; 
+    if (wmsUrl.toLowerCase().endsWith('/wfs')) { 
+        wmsUrl = wmsUrl.substring(0, wmsUrl.length - 4) + '/wms'; 
+    } 
+    return wmsUrl; 
+}
+
+function getWmsSignature(c) { return JSON.stringify({ wfs: c.wfs, type: c.type, srs: c.srs, enabled: c.enabled }); }
+
+function createWmsLayer(c, opacity) { 
+    return L.tileLayer.wms(buildWmsUrlFromWfs(c.wfs), { 
+        layers: c.type, 
+        format: 'image/png', 
+        transparent: true, 
+        attribution: c.name, 
+        pane: 'wmsPane', 
+        maxNativeZoom: 19, 
+        maxZoom: 22, 
+        opacity: opacity, 
+        keepBuffer: 4, 
+        updateWhenIdle: true 
+    }); 
+}
+
+function updateMapWmsLayers() { 
+    let wmsOpacity = {}; 
+    try { wmsOpacity = JSON.parse(localStorage.getItem('giscr_wms_opacity') || '{}'); } catch(e){} 
+    const desiredIds = new Set(config.filter(c => c.enabled).map(c => c.id)); 
+    Object.keys(activeWmsLayers).forEach(id => { 
+        if (!desiredIds.has(id)) { 
+            const layer = activeWmsLayers[id]; 
+            if(layerControl) layerControl.removeLayer(layer); 
+            map.removeLayer(layer); 
+            delete activeWmsLayers[id]; 
+            delete wmsLayerMeta[id]; 
+        } 
+    }); 
+    config.forEach(c => { 
+        if (!c.enabled) return; 
+        const signature = getWmsSignature(c); 
+        const desiredOpacity = wmsOpacity[c.id] !== undefined ? wmsOpacity[c.id] : 0.75; 
+        const existing = activeWmsLayers[c.id]; 
+        const existingMeta = wmsLayerMeta[c.id]; 
+        if (existing && existingMeta && existingMeta.signature === signature) { 
+            if (existing.options.opacity !== desiredOpacity) { 
+                existing.setOpacity(desiredOpacity); 
+            } 
+            return; 
+        } 
+        if (existing) { 
+            const wasVisible = map.hasLayer(existing); 
+            if(layerControl) layerControl.removeLayer(existing); 
+            map.removeLayer(existing); 
+            const rebuilt = createWmsLayer(c, desiredOpacity); 
+            activeWmsLayers[c.id] = rebuilt; 
+            wmsLayerMeta[c.id] = { signature }; 
+            if(layerControl) layerControl.addOverlay(rebuilt, c.name); 
+            if (wasVisible) rebuilt.addTo(map); 
+            return; 
+        } 
+        const wmsLayer = createWmsLayer(c, desiredOpacity); 
+        activeWmsLayers[c.id] = wmsLayer; 
+        wmsLayerMeta[c.id] = { signature }; 
+        if(layerControl) layerControl.addOverlay(wmsLayer, c.name); 
+    }); 
+    window.__wms = activeWmsLayers; 
+    if (document.getElementById('layers-panel') && !document.getElementById('layers-panel').classList.contains('hidden')) { 
+        renderLayersPanel(); 
+    } 
+}
+
+function onMapClick(e) { 
+    if (!appState.isDrawing) return; 
+    const p8908 = proj4("EPSG:4326", "EPSG:8908", [e.latlng.lng, e.latlng.lat]); 
+    const idInput = document.getElementById('man-id'); 
+    const id = idInput.value; 
+    if (appState.geoType === 'point') { 
+        addFeature('points', id, p8908); 
+        const feedback = document.getElementById('manual-status'); 
+        if (feedback) { 
+            feedback.innerHTML = `<span style="color:var(--primary); font-weight:bold;">✔ Punto ${id} agregado</span>`; 
+            setTimeout(() => feedback.innerHTML = '', 2000); 
+        } 
+        idInput.value = 'P' + (data.points.length + 1); 
+    } else { 
+        tempGeom.id = id; 
+        tempGeom.type = appState.geoType; 
+        tempGeom.vertices.push(p8908); 
+        drawTempGeom(); 
+        const statusEl = document.getElementById('manual-status'); 
+        if(statusEl) statusEl.innerText = `Vértices: ${tempGeom.vertices.length}`; 
+        document.getElementById('man-x').value = p8908[0].toFixed(2); 
+        document.getElementById('man-y').value = p8908[1].toFixed(2); 
+    } 
+}
+
+function onMapDblClick(e) { 
+    if (appState.isDrawing && (appState.geoType === 'line' || appState.geoType === 'polygon')) { 
+        map.doubleClickZoom.disable(); 
+        finishGeometry(); 
+        setTimeout(() => map.doubleClickZoom.enable(), 500); 
+    } 
+}
+
+function saveDataToStorage() { try { localStorage.setItem('giscr_data', JSON.stringify(data)); } catch(e){} }
+
+function loadDataFromStorage() { 
+    const s = localStorage.getItem('giscr_data'); 
+    if(!s) { 
+        document.getElementById('man-id').value = 'P1'; 
+        return; 
+    } 
+    try { 
+        const loaded = JSON.parse(s); 
+        data = { points: [], lines: [], polygons: [], ...loaded }; 
+        ['points', 'lines', 'polygons'].forEach(type => { 
+            if(data[type] && Array.isArray(data[type])) { 
+                data[type].forEach(item => drawFeatureOnMap(type, item)); 
+            } else { 
+                data[type] = []; 
+            } 
+        }); 
+        updateInventory(); 
+        fitMapToAll(false); 
+    } catch(e) { 
+        console.warn("Error cargando datos:", e); 
+        data = { points: [], lines: [], polygons: [] }; 
+    } 
+}
+
+function updateInventory() { 
+    const pts = data.points ? data.points.length : 0; 
+    const lns = data.lines ? data.lines.length : 0; 
+    const pols = data.polygons ? data.polygons.length : 0; 
+    document.getElementById('badge-points').innerText = `${pts} Puntos`; 
+    document.getElementById('badge-lines').innerText = `${lns} Líneas`; 
+    document.getElementById('badge-polys').innerText = `${pols} Polígonos`; 
+    
+    if(listState.points) document.getElementById('list-points').classList.add('show'); 
+    if(listState.lines) document.getElementById('list-lines').classList.add('show'); 
+    if(listState.polys) document.getElementById('list-polys').classList.add('show'); 
+    
+    const renderList = (dataType, elId) => { 
+        const container = document.getElementById(elId); 
+        if (!container) return; 
+        const listData = data[dataType] || []; 
+        container.innerHTML = listData.map((item, idx) => ` 
+          <div class="data-item"> 
+            <span>${item.id}</span> 
+            <div class="item-controls"> 
+              <button class="btn-sm btn-secondary btn-icon-only" title="Ver" onclick="zoomToFeature('${dataType}', '${item.id}')">👁</button> 
+              <button class="btn-sm btn-danger btn-icon-only" title="Borrar" onclick="deleteFeature('${dataType}', ${idx})">🗑</button> 
+            </div> 
+          </div> `).join(''); 
+    }; 
+    renderList('points', 'list-points'); 
+    renderList('lines', 'list-lines'); 
+    renderList('polygons', 'list-polys'); 
+}
+
+function zoomToFeature(type, id) { 
+    const list = data[type]; 
+    const item = list.find(i => i.id === id); 
+    if (!item) return; 
+    if (type === 'points') { 
+        map.setView(toLatLng(item.geom), 18); 
+    } else { 
+        const bounds = L.latLngBounds(item.geom.map(c => toLatLng(c))); 
+        map.fitBounds(bounds.pad(0.5)); 
+    } 
+}
+
+function deleteFeature(type, index) { 
+    if(!confirm('¿Eliminar elemento?')) return; 
+    data[type].splice(index, 1)[0]; 
+    layers[type === 'polygons' ? 'polys' : type].clearLayers(); 
+    data[type].forEach(item => drawFeatureOnMap(type, item)); 
+    updateInventory(); 
+    saveDataToStorage(); 
+}
+
+function toggleDrawingMode() { 
+    appState.isDrawing = !appState.isDrawing; 
+    const mapContainer = document.getElementById('map'); 
+    const tooltip = document.getElementById('drawing-tooltip'); 
+    const btn = document.getElementById('btn-draw-map'); 
+    if (appState.isDrawing) { 
+        mapContainer.classList.add('drawing-mode'); 
+        tooltip.style.display = 'block'; 
+        btn.classList.add('btn-primary'); 
+        btn.classList.remove('btn-secondary'); 
+        btn.innerText = "🛑 Detener Dibujo"; 
+        tooltip.innerText = appState.geoType === 'point' ? "Haga clic para agregar puntos" : "Clic: Vértice | Doble Clic: Fin"; 
+    } else { 
+        mapContainer.classList.remove('drawing-mode'); 
+        tooltip.style.display = 'none'; 
+        btn.classList.remove('btn-primary'); 
+        btn.classList.add('btn-secondary'); 
+        btn.innerText = "✏️ Dibujar en Mapa"; 
+    } 
+}
+
+const DPI = 96; const INCHES_PER_METER = 39.3701;
+
+function getMapScale() { 
+    const center = map.getCenter(); 
+    const zoom = map.getZoom(); 
+    const metersPerPixel = 156543.03392 * Math.cos(center.lat * Math.PI / 180) / Math.pow(2, zoom); 
+    return metersPerPixel * INCHES_PER_METER * DPI; 
+}
+
+function setMapScale(targetScale) { 
+    const center = map.getCenter(); 
+    const metersPerPixel = targetScale / (INCHES_PER_METER * DPI); 
+    const zoom = Math.log2((156543.03392 * Math.cos(center.lat * Math.PI / 180)) / metersPerPixel); 
+    map.setZoom(zoom, { animate: true }); 
+}
+
+function updateScaleControl() { 
+    const input = document.getElementById('numeric-scale'); 
+    if (document.activeElement === input) return; 
+    input.value = Math.round(getMapScale()).toLocaleString('es-CR'); 
+}
+
+function snapToRoundScale() { 
+    const current = getMapScale(); 
+    const base = Math.pow(10, Math.floor(Math.log10(current))); 
+    const candidates = [1, 2, 2.5, 5, 10].map(v => v * base); 
+    let closest = candidates.reduce((prev, curr) => Math.abs(curr - current) < Math.abs(prev - current) ? curr : prev); 
+    if (Math.abs(closest - current) / current < 0.1) setMapScale(closest); 
+}
+
+function initScaleInput() { 
+    const input = document.getElementById('numeric-scale'); 
+    input.addEventListener('keydown', (e) => { 
+        if (e.key === 'Enter') { 
+            const val = parseFloat(input.value.replace(/[^0-9.]/g, '')); 
+            if (val > 0) setMapScale(val); 
+            input.blur(); 
+        } 
+    }); 
+}
+
+function transformTo8908(x, y, fromEpsg) { 
+    if (fromEpsg === '8908') return [x, y]; 
+    return proj4(`EPSG:${fromEpsg}`, "EPSG:8908", [x, y]); 
+}
+
+function toLatLng(coord8908) { 
+    const p = proj4("EPSG:8908", "EPSG:4326", coord8908); 
+    return [p[1], p[0]]; 
+}
+
+function addFeature(type, id, geom) { 
+    const item = { id, geom }; 
+    data[type].push(item); 
+    drawFeatureOnMap(type, item); 
+    updateInventory(); 
+    saveDataToStorage(); 
+}
+
+function drawFeatureOnMap(type, item) { 
+    const { id, geom } = item; 
+    if (type === 'points') { 
+        const ll = toLatLng(geom); 
+        L.circleMarker(ll, { color: '#000', weight: 2, fillColor: '#FFEB3B', fillOpacity: 1, radius: 6 }).bindPopup(`<b>${id}</b>`).addTo(layers.points); 
+    } else { 
+        const ll = geom.map(c => toLatLng(c)); 
+        if (type === 'lines') { 
+            L.polyline(ll, { color: '#FF5722', weight: 4 }).addTo(layers.lines); 
+        } else { 
+            L.polygon(ll, { color: '#00E5FF', weight: 3, fillOpacity: 0.15 }).addTo(layers.polys); 
+        } 
+    } 
+}
+
+function fitMapToAll(snap = false) { 
+    const bounds = L.latLngBounds(); 
+    let valid = false; 
+    [layers.points, layers.lines, layers.polys].forEach(l => { 
+        if(l.getLayers().length){ 
+            bounds.extend(l.getBounds()); valid=true; 
+        } 
+    }); 
+    if(valid) map.fitBounds(bounds.pad(0.1)); 
+}
+
+function switchMainTab(t) { 
+    document.querySelectorAll('#topbar .tab').forEach(el => el.classList.remove('active')); 
+    document.querySelector(`[data-tab="${t}"]`).classList.add('active'); 
+    document.querySelectorAll('.panel').forEach(p => p.classList.remove('active')); 
+    document.getElementById(`panel-${t}`).classList.add('active'); 
+    if(t === 'results') triggerSpatialAnalysis(); 
+}
+
+function setGeoType(type) { 
+    appState.geoType = type; 
+    const context = appState.inputMethod; 
+    document.querySelectorAll(`#input-${context} .geo-option`).forEach(el => el.classList.remove('active')); 
+    const targetEl = document.getElementById(`geo-${context}-${type}`); 
+    if (targetEl) targetEl.classList.add('active'); 
+    if (context === 'manual') { 
+        const btnAdd = document.getElementById('btn-add-vertex'); 
+        if(btnAdd) { 
+            btnAdd.innerHTML = type === 'point' ? '➕ Agregar Punto' : '➕ Agregar Vértice (Manual)'; 
+        } 
+        document.getElementById('poly-controls').style.display = (type !== 'point' && tempGeom.vertices.length > 0) ? 'flex' : 'none'; 
+        const prefix = type === 'point' ? 'P' : (type === 'line' ? 'L' : 'POL'); 
+        document.getElementById('man-id').value = prefix + ((data[type + 's'] || data.polygons).length + 1); 
+        if (tempGeom.type !== type) cancelGeometry(); 
+    } 
+}
+
+function manualAction() { 
+    const id = document.getElementById('man-id').value; 
+    let x = parseFloat(document.getElementById('man-x').value); 
+    let y = parseFloat(document.getElementById('man-y').value); 
+    const epsg = document.getElementById('man-epsg').value; 
+    if (!id || isNaN(x) || isNaN(y)) return alert('Coordenadas inválidas. Verifique X y Y.'); 
+    const c = transformTo8908(x, y, epsg); 
+    if (appState.geoType === 'point') { 
+        addFeature('points', id, c); 
+    } else { 
+        tempGeom.id = id; 
+        tempGeom.type = appState.geoType; 
+        tempGeom.vertices.push(c); 
+        drawTempGeom(); 
+        document.getElementById('poly-controls').style.display = 'flex'; 
+    } 
+}
+
+function finishGeometry() { 
+    const len = tempGeom.vertices.length; 
+    if (tempGeom.type === 'line' && len < 2) return alert("Una línea requiere al menos 2 puntos."); 
+    if (tempGeom.type === 'polygon' && len < 3) return alert("Un polígono requiere al menos 3 puntos."); 
+    if (tempGeom.type === 'polygon') { 
+        const first = tempGeom.vertices[0]; 
+        const last = tempGeom.vertices[len - 1]; 
+        if (first[0] !== last[0] || first[1] !== last[1]) { 
+            tempGeom.vertices.push(first); 
+        } 
+    } 
+    addFeature(tempGeom.type === 'line' ? 'lines' : 'polygons', tempGeom.id, tempGeom.vertices); 
+    cancelGeometry(); 
+}
+
+function cancelGeometry() { 
+    tempGeom = { type: 'point', vertices: [], id: '' }; 
+    layers.temp.clearLayers(); 
+    document.getElementById('poly-controls').style.display = 'none'; 
+    document.getElementById('manual-status').innerText = ''; 
+}
+
+function drawTempGeom() { 
+    layers.temp.clearLayers(); 
+    const ll = tempGeom.vertices.map(v => toLatLng(v)); 
+    ll.forEach(p => L.circleMarker(p, {color:'orange', radius:4}).addTo(layers.temp)); 
+    if(ll.length>1) L.polyline(ll, {color:'orange', dashArray:'5,5'}).addTo(layers.temp); 
+}
+
+function initResizer() { 
+    const handle = document.getElementById('resizer-handle'); 
+    const sidebar = document.getElementById('sidebar'); 
+    let isResizing = false; 
+    handle.addEventListener('mousedown', (e) => { 
+        isResizing = true; 
+        sidebar.classList.add('resizing'); 
+    }); 
+    document.addEventListener('mousemove', (e) => { 
+        if (!isResizing) return; 
+        let w = window.innerWidth - e.clientX; 
+        const maxW = window.innerWidth * 0.6; 
+        sidebar.style.width = Math.min(maxW, Math.max(280, w)) + 'px'; 
+        map.invalidateSize(); 
+    }); 
+    document.addEventListener('mouseup', () => { 
+        isResizing = false; 
+        sidebar.classList.remove('resizing'); 
+    }); 
+}
+
+async function importUniversalFile() { 
+    const file = document.getElementById('file-upload').files[0]; 
+    let srcEpsg = document.getElementById('file-epsg').value; 
+    if (!file) return; 
+    const status = document.getElementById('import-status'); 
+    status.innerText = "Cargando..."; 
+    try { 
+        const buf = await file.arrayBuffer(); 
+        let geojson; 
+        if (file.name.endsWith('.zip')) geojson = await shp(buf); 
+        else if (file.name.endsWith('.kml')) geojson = toGeoJSON.kml(new DOMParser().parseFromString(new TextDecoder().decode(buf), 'text/xml')); 
+        else if (file.name.endsWith('.gpx')) geojson = toGeoJSON.gpx(new DOMParser().parseFromString(new TextDecoder().decode(buf), 'text/xml')); 
+        else geojson = JSON.parse(new TextDecoder().decode(buf)); 
+        
+        if (Array.isArray(geojson)) geojson = { features: geojson.flatMap(g => g.features || [g]) }; 
+        if (!geojson.features) geojson = { features: [geojson] }; 
+        
+        let detected4326 = false; 
+        for(const f of geojson.features) { 
+            if(!f.geometry) continue; 
+            const c = getSampleCoord(f.geometry); 
+            if(c && Math.abs(c[0]) <= 180 && Math.abs(c[1]) <= 90) { 
+                detected4326 = true; break; 
+            } 
+        } 
+        if(detected4326) srcEpsg = '4326'; 
+        
+        let stats = { p: 0, l: 0, poly: 0 }; 
+        geojson.features.forEach(f => { 
+            if (!f.geometry) return; 
+            const id = f.properties?.name || f.properties?.id || `IMP${Math.floor(Math.random()*1000)}`; 
+            const g = f.geometry; 
+            const type = g.type; 
+            if (type === 'Point') { 
+                addFeature('points', id, transformTo8908(g.coordinates[0], g.coordinates[1], srcEpsg)); 
+                stats.p++; 
+            } else if (type === 'LineString' || type === 'MultiLineString') { 
+                const lines = type === 'LineString' ? [g.coordinates] : g.coordinates; 
+                lines.forEach((l, i) => { 
+                    addFeature('lines', id + (i>0?`_${i+1}`:''), l.map(c => transformTo8908(c[0], c[1], srcEpsg))); 
+                    stats.l++; 
+                }); 
+            } else if (type === 'Polygon' || type === 'MultiPolygon') { 
+                const polys = type === 'Polygon' ? [g.coordinates] : g.coordinates; 
+                polys.forEach((p, i) => { 
+                    addFeature('polygons', id + (i>0?`_${i+1}`:''), p[0].map(c => transformTo8908(c[0], c[1], srcEpsg))); 
+                    stats.poly++; 
+                }); 
+            } 
+        }); 
+        status.innerText = `Hecho: ${stats.p} Ptos, ${stats.l} Líneas, ${stats.poly} Polígonos`; 
+        fitMapToAll(); 
+    } catch(e) { 
+        status.innerText = "Error: " + e.message; 
+        console.error(e); 
+    } 
+}
+
+function getSampleCoord(g) { 
+    if(g.type === 'Point') return g.coordinates; 
+    if(g.type === 'LineString' || g.type === 'MultiPoint') return g.coordinates[0]; 
+    if(g.type === 'Polygon' || g.type === 'MultiLineString') return g.coordinates[0][0]; 
+    if(g.type === 'MultiPolygon') return g.coordinates[0][0][0]; 
+    return null; 
+}
+
+function processPaste() { 
+    const text = document.getElementById('paste-area').value; 
+    const epsg = document.getElementById('paste-epsg').value; 
+    const type = appState.geoType; 
+    const lines = text.split('\n'); 
+    const groups = {}; 
+    let count = 0; 
+    lines.forEach(line => { 
+        const p = line.split(/[\t,;]+/).map(s => s.trim()); 
+        if (p.length < 3 || isNaN(parseFloat(p[1]))) return; 
+        const id = p[0]; 
+        const c = transformTo8908(parseFloat(p[1]), parseFloat(p[2]), epsg); 
+        if (type === 'point') { 
+            addFeature('points', id, c); 
+            count++; 
+        } else { 
+            if (!groups[id]) groups[id] = []; 
+            groups[id].push(c); 
+        } 
+    }); 
+    if (type !== 'point') { 
+        Object.keys(groups).forEach(id => { 
+            let verts = groups[id]; 
+            if (type === 'polygon' && verts.length >= 3) { 
+                if (verts[0][0] !== verts[verts.length-1][0] || verts[0][1] !== verts[verts.length-1][1]) { 
+                    verts.push(verts[0]); 
+                } 
+            } 
+            if (verts.length >= 2) { 
+                addFeature(type === 'line' ? 'lines' : 'polygons', id, verts); 
+                count++; 
+            } 
+        }); 
+    } 
+    alert(`Procesados: ${count} elementos`); 
+    fitMapToAll(true); 
+}
+
+function switchToResults() { switchMainTab('results'); }
+
+function initTheme() { 
+    const saved = localStorage.getItem('theme') || 'light';
+    document.documentElement.setAttribute('data-theme', saved); 
+}
+
+function toggleTheme() { 
+    const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; 
+    document.documentElement.setAttribute('data-theme', t); 
+    localStorage.setItem('theme', t); 
+}
+
+function toggleList(t) { 
+    const l = document.getElementById(`list-${t}`); 
+    l.classList.toggle('show'); 
+    listState[t] = l.classList.contains('show'); 
+    localStorage.setItem('giscr_list_state', JSON.stringify(listState)); 
+}
+
+function clearAllData() { 
+    if(!confirm('¿Borrar TODO el trabajo actual?')) return; 
+    data = { points: [], lines: [], polygons: [] }; 
+    ['points', 'lines', 'polys'].forEach(k => layers[k].clearLayers()); 
+    updateInventory(); 
+    saveDataToStorage(); 
+}
+
+function renderConfig() { 
+    const container = document.getElementById('config-list'); 
+    container.innerHTML = ''; 
+    config.forEach((l, i) => { 
+        const details = document.createElement('details'); 
+        details.style.marginBottom = '8px';
+        details.style.padding = '8px';
+        details.style.border = '1px solid var(--border)';
+        details.style.borderRadius = '4px';
+        
+        const summary = document.createElement('summary'); 
+        summary.style.cursor = 'pointer';
+        summary.style.display = 'flex';
+        summary.style.justifyContent = 'space-between';
+        summary.style.alignItems = 'center';
+        
+        const left = document.createElement('div');
+        left.style.display = 'flex';
+        left.style.alignItems = 'center';
+        left.style.gap = '8px';
+        
+        const chk = document.createElement('input'); 
+        chk.type = 'checkbox'; 
+        chk.style.width = 'auto';
+        chk.checked = l.enabled; 
+        chk.onclick = (e) => e.stopPropagation();
+        chk.onchange = (e) => { 
+            config[i].enabled = e.target.checked; 
+            saveConfig(false); 
+            updateMapWmsLayers(); 
+        }; 
+        
+        const spanName = document.createElement('span'); 
+        spanName.innerText = l.name;
+        
+        left.appendChild(chk);
+        left.appendChild(spanName);
+        
+        const btnDel = document.createElement('span'); 
+        btnDel.style.fontSize = '12px'; 
+        btnDel.style.color = 'var(--danger)'; 
+        btnDel.style.cursor = 'pointer'; 
+        btnDel.innerText = '🗑'; 
+        btnDel.onclick = (e) => { 
+            e.preventDefault(); 
+            e.stopPropagation();
+            deleteLayer(i); 
+        }; 
+        
+        summary.appendChild(left);
+        summary.appendChild(btnDel); 
+        
+        const content = document.createElement('div'); 
+        content.style.paddingTop = '10px';
+        
+        const createInputRow = (label, val, onChange) => { 
+            const div = document.createElement('div'); 
+            div.style.marginBottom = '6px';
+            const b = document.createElement('label'); 
+            b.innerText = label; 
+            b.style.fontSize = '10px';
+            div.appendChild(b); 
+            const inp = document.createElement('input'); 
+            inp.value = val; 
+            inp.onchange = onChange; 
+            div.appendChild(inp); 
+            return div; 
+        }; 
+        content.appendChild(createInputRow('URL:', l.wfs, (e) => config[i].wfs = e.target.value)); 
+        content.appendChild(createInputRow('Capa:', l.type, (e) => config[i].type = e.target.value)); 
+        
+        details.appendChild(summary); 
+        details.appendChild(content); 
+        container.appendChild(details); 
+    }); 
+}
+
+function saveConfig(alertUser=true) { 
+    localStorage.setItem('giscr_config', JSON.stringify(config)); 
+    if(alertUser) alert('Configuración guardada localmente.'); 
+}
+
+function resetConfig() { 
+    if(confirm('¿Restaurar configuración predeterminada?')) { 
+        config = JSON.parse(JSON.stringify(DEFAULT_LAYERS)); 
+        saveConfig(); 
+        renderConfig(); 
+        updateMapWmsLayers(); 
+    } 
+}
+
+function deleteLayer(i) { 
+    if(confirm('¿Borrar capa de la configuración?')) { 
+        config.splice(i,1); 
+        saveConfig(false); 
+        renderConfig(); 
+        updateMapWmsLayers(); 
+    } 
+}
+
+function addNewLayer() { 
+    const name = document.getElementById('new-name').value.trim(); 
+    const url = document.getElementById('new-url').value.trim(); 
+    const type = document.getElementById('new-type').value.trim(); 
+    const attr = document.getElementById('new-attr').value.trim(); 
+    const srs = document.getElementById('new-srs').value; 
+    if (!name || !url || !type) return alert('Datos incompletos'); 
+    config.push({id:'u_'+Date.now(), name, wfs:url, type, attr, srs, enabled:true}); 
+    saveConfig(); 
+    renderConfig(); 
+    updateMapWmsLayers(); 
+    alert('Capa agregada'); 
+}
+
+// =========================================================================
+// SISTEMA DE ANÁLISIS ESPACIAL Y REPORTES ROBUSTO (BASADO EN JSTS)
+// =========================================================================
+
+const jstsReader = new jsts.io.GeoJSONReader();
+
+function projectCoordList(coords, fromEpsg, toEpsg) {
+    if (fromEpsg === toEpsg) return coords;
+    return coords.map(c => proj4(fromEpsg, toEpsg, c));
+}
+
+function ensureClosedRing(ring) {
+    if (!Array.isArray(ring) || ring.length < 3) return ring;
+    const first = ring[0];
+    const last = ring[ring.length - 1];
+    if (first[0] !== last[0] || first[1] !== last[1]) return [...ring, first];
+    return ring;
+}
+
+function toJSTSGeometry(type, coords8908) {
+    try {
+        if (type === 'points') return jstsReader.read({type: 'Point', coordinates: coords8908});
+        if (type === 'lines') return jstsReader.read({type: 'LineString', coordinates: coords8908});
+        if (type === 'polygons') return jstsReader.read({type: 'Polygon', coordinates: [ensureClosedRing(coords8908)]}).buffer(0);
+    } catch(e) { return null; }
+}
+
+function safeUnion(a, b) { try { return a ? a.union(b) : b; } catch { return a; } }
+function safeIntersection(a, b) { try { return a.intersection(b); } catch { return null; } }
+function safeDifference(a, b) { try { return a.difference(b); } catch { return null; } }
+
+// =========================================================================
+// RED ROBUSTA (WFS): GET directo, POST directo y proxies con fallback
+// =========================================================================
+
+function getRuntimeNetworkContext() {
+    const isBrowser = typeof window !== 'undefined' && typeof location !== 'undefined';
+    return {
+        isBrowser,
+        isFileOrigin: isBrowser && location.protocol === 'file:',
+        origin: isBrowser ? location.origin : 'server',
+    };
+}
+
+function normalizeProxy(proxy, targetUrl) {
+    if (typeof proxy === 'function') return proxy(targetUrl);
+    if (typeof proxy !== 'string') return null;
+    if (proxy.includes('{url}')) return proxy.replace('{url}', encodeURIComponent(targetUrl));
+    return `${proxy}${encodeURIComponent(targetUrl)}`;
+}
+
+// NUEVO ORDEN Y SELECCIÓN DE PROXIES
+function getDefaultProxyChain() {
+    return [
+        'https://api.codetabs.com/v1/proxy?quest={url}',
+        'https://api.allorigins.win/raw?url={url}',
+        'https://corsproxy.io/?'
+    ];
+}
+
+async function fetchJsonStrict(url, options, label) {
+    const controller = new AbortController();
+    const timeoutMs = (options && typeof options.timeoutMs === 'number') ? options.timeoutMs : 60000;
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        const { timeoutMs: _timeout, ...fetchOpts } = options || {};
+        const response = await fetch(url, { ...fetchOpts, signal: controller.signal });
+
+        if (!response.ok) {
+            let snippet = '';
+            try { snippet = (await response.text()).slice(0, 200); } catch {}
+            const extra = snippet ? ` | ${snippet}` : '';
+            throw new Error(`HTTP ${response.status}${extra}`);
+        }
+
+        const ct = (response.headers.get('content-type') || '').toLowerCase();
+        if (ct.includes('application/json') || ct.includes('+json')) {
+            return await response.json();
+        }
+
+        const text = await response.text();
+        try { return JSON.parse(text); }
+        catch { throw new Error(`Respuesta no es JSON válido`); }
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+async function fetchWithProxyFallback(targetUrl, proxyChain = getDefaultProxyChain()) {
+    const ctx = getRuntimeNetworkContext();
+    const [baseWfsUrl, queryString = ''] = String(targetUrl).split('?');
+    const plans = [];
+
+    if (!ctx.isFileOrigin) {
+        plans.push({ label: 'direct-get', url: targetUrl, options: { method: 'GET' } });
+        if (queryString) {
+            plans.push({
+                label: 'direct-post',
+                url: baseWfsUrl,
+                options: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: queryString },
+            });
+        }
+    }
+
+    proxyChain.forEach((proxy, idx) => {
+        const proxyUrl = normalizeProxy(proxy, targetUrl);
+        if (!proxyUrl) return;
+        plans.push({ label: `proxy-${idx + 1}-get`, url: proxyUrl, options: { method: 'GET' } });
+    });
+
+    let lastError = null;
+    let errorLog = [];
+    
+    for (const plan of plans) {
+        try {
+            return await fetchJsonStrict(plan.url, { ...plan.options, timeoutMs: 60000 }, plan.label);
+        } catch (err) {
+            lastError = err;
+            const errorMsg = err.message || String(err);
+            console.warn(`[WFS] Falló ${plan.label}:`, errorMsg);
+            errorLog.push(`[${plan.label}: ${errorMsg}]`);
+        }
+    }
+
+    const fileHint = ctx.isFileOrigin
+        ? ' (file:// detectado. Use http://localhost para evitar CORS).'
+        : '';
+
+    throw new Error(`Fallo total de descargas. Historial: ${errorLog.join(' → ')}${fileHint}`);
+}
+
+function renderNetworkDiagnostics(targetId = 'import-status') {
+    const el = document.getElementById(targetId);
+    if (!el) return;
+
+    const ctx = getRuntimeNetworkContext();
+    if (ctx.isFileOrigin) {
+        el.innerHTML = '<span style="color:var(--warn)">⚠ Ejecución en <b>file://</b>. Si ve errores CORS/413, ejecute en <b>http://localhost</b> y/o use un proxy local.</span>';
+    } else {
+        el.innerHTML = '<span style="color:var(--text-muted)">Red: modo navegador (http/https). Si un WFS no expone CORS, el sistema usará proxies configurados automáticamente.</span>';
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    renderNetworkDiagnostics('import-status');
+});
+
+// =======================================================================================
+// NUEVAS FUNCIONES DE ANÁLISIS ACTUALIZADAS (Solución de congelamiento UI + UnaryUnion)
+// =======================================================================================
+
+async function triggerSpatialAnalysis() {
+    const container = document.getElementById('report-container');
+    const btnDownload = document.getElementById('btn-download-report');
+    
+    if (data.points.length === 0 && data.lines.length === 0 && data.polygons.length === 0) {
+        container.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:30px 0;">No hay datos ingresados para analizar.</p>';
+        btnDownload.style.display = 'none';
+        return;
+    }
+    
+    // Se añade un ID "analysis-status-text" para poder actualizar el texto en vivo
+    container.innerHTML = `
+        <div class="spinner-container">
+            <div class="loader"></div>
+            <p id="analysis-status-text" style="font-weight: 500; margin-top: 10px; color: var(--primary);">Preparando el análisis...</p>
+        </div>`;
+    btnDownload.style.display = 'none';
+
+    try {
+        globalAnalysisResults = await runSpatialAnalysis();
+        renderAnalysisUI(globalAnalysisResults);
+        btnDownload.style.display = 'block';
+    } catch(e) {
+        console.error(e);
+        container.innerHTML = `<p style="color:var(--danger); text-align:center; padding:30px;">Error crítico en el análisis: ${e.message}</p>`;
+    }
+}
+
+async function runSpatialAnalysis() {
+    const statusEl = document.getElementById('analysis-status-text');
+    
+    // Función auxiliar para actualizar la UI y evitar que el navegador se congele
+    const updateStatus = async (msg) => {
+        if(statusEl) statusEl.innerText = msg;
+        // La pausa de 50ms le da tiempo al navegador para renderizar el nuevo texto en pantalla
+        await new Promise(r => setTimeout(r, 50)); 
+    };
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    const processGeom = (geom, type) => {
+        const coords = type === 'points' ? [geom] : geom;
+        coords.forEach(c => {
+            if(c[0]<minX) minX=c[0]; if(c[1]<minY) minY=c[1];
+            if(c[0]>maxX) maxX=c[0]; if(c[1]>maxY) maxY=c[1];
+        });
+    };
+    data.points.forEach(i => processGeom(i.geom, 'points'));
+    data.lines.forEach(i => processGeom(i.geom, 'lines'));
+    data.polygons.forEach(i => processGeom(i.geom, 'polygons'));
+    
+    minX-=100; minY-=100; maxX+=100; maxY+=100; 
+
+    let coverages = [];
+    const geomFactory = new jsts.geom.GeometryFactory(); // Se requiere para UnaryUnion (Unión en cascada ultra-rápida)
+
+    for (const c of config) {
+        if (!c.enabled) continue;
+        
+        const ll = proj4('EPSG:8908', c.srs, [minX, minY]);
+        const ur = proj4('EPSG:8908', c.srs, [maxX, maxY]);
+        const wfsMinX = Math.min(ll[0], ur[0]); const wfsMinY = Math.min(ll[1], ur[1]);
+        const wfsMaxX = Math.max(ll[0], ur[0]); const wfsMaxY = Math.max(ll[1], ur[1]);
+        
+        const bboxStr = `${wfsMinX},${wfsMinY},${wfsMaxX},${wfsMaxY},${c.srs}`;
+        const targetUrl = `${c.wfs}?service=WFS&version=1.0.0&request=GetFeature&typeName=${c.type}&outputFormat=application/json&bbox=${bboxStr}`;
+        
+        const classes = {};
+        const classesArrays = {}; // Se agruparán en Arrays para no unirlos 1 por 1
+        
+        try {
+            await updateStatus(`Descargando datos: ${c.name} (puede tardar por tamaño)...`);
+            const rawGeojson = await fetchWithProxyFallback(targetUrl);
+            
+            await updateStatus(`Extrayendo geometrías de ${c.name}...`);
+            
+            if (rawGeojson && rawGeojson.features) {
+                rawGeojson.features.forEach(f => {
+                    if (!f.geometry) return;
+                    
+                    // EXTRAER ATRIBUTO (INSENSIBLE A MAYÚSCULAS) GARANTIZA QUE ENCUENTRE USO_COBERT o uso_cobert
+                    let attrValue = 'SIN_DATO';
+                    if (f.properties) {
+                        const searchKey = c.attr.toLowerCase();
+                        const foundKey = Object.keys(f.properties).find(k => k.toLowerCase() === searchKey);
+                        if (foundKey && f.properties[foundKey] != null) {
+                            attrValue = String(f.properties[foundKey]);
+                        }
+                    }
+                    
+                    if (!classesArrays[attrValue]) classesArrays[attrValue] = [];
+
+                    const appendPoly = (ringCoords) => {
+                        try {
+                            const ring8908 = projectCoordList(ringCoords, c.srs, 'EPSG:8908');
+                            const poly = jstsReader.read({ type: 'Polygon', coordinates: [ensureClosedRing(ring8908)] });
+                            // Solo agregamos a la lista, NO hacemos union aquí
+                            classesArrays[attrValue].push(poly);
+                        } catch(err) {} 
+                    };
+
+                    if (f.geometry.type === 'Polygon') {
+                        appendPoly(f.geometry.coordinates[0]);
+                    } else if (f.geometry.type === 'MultiPolygon') {
+                        f.geometry.coordinates.forEach(polyCoords => appendPoly(polyCoords[0]));
+                    }
+                });
+
+                // ESTA ES LA MAGIA: UnaryUnion en vez de la destructiva unión iterativa.
+                await updateStatus(`Procesando uniones complejas en ${c.name}...`);
+                
+                for (const attrValue in classesArrays) {
+                    try {
+                        const geomArray = classesArrays[attrValue];
+                        if (geomArray.length === 1) {
+                            classes[attrValue] = geomArray[0].buffer(0); // Único polígono
+                        } else if (geomArray.length > 1) {
+                            // Enviar todos los polígonos juntos a JSTS para una unión estructurada
+                            const collection = geomFactory.createGeometryCollection(geomArray);
+                            classes[attrValue] = collection.union();
+                        }
+                    } catch(err) {
+                        console.warn(`Error en unión espacial masiva para atributo ${attrValue}`, err);
+                    }
+                }
+            }
+            coverages.push({ name: c.name, error: false, classes: classes, classValues: Object.keys(classes).sort() });
+        } catch(e) {
+            console.warn(`Error procesando capa ${c.name}:`, e);
+            coverages.push({ name: c.name, error: true, classes: {}, classValues: [] });
+        }
+    }
+
+    await updateStatus("Calculando intersecciones finales...");
+
+    let res = { points: null, lines: null, polygons: null };
+
+    // --- PUNTOS ---
+    if (data.points.length > 0) {
+        res.points = {
+            ids: data.points.map(p => p.id),
+            desc: data.points.map(p => ({ id: p.id, x: p.geom[0].toFixed(2), y: p.geom[1].toFixed(2) })),
+            classif: {} 
+        };
+        coverages.forEach(cov => {
+            res.points.classif[cov.name] = {};
+            if (cov.error) {
+                data.points.forEach(p => res.points.classif[cov.name][p.id] = "ERROR_CAPA");
+                return;
+            }
+            data.points.forEach(p => {
+                const pGeom = toJSTSGeometry('points', p.geom);
+                let foundValues = [];
+                Object.entries(cov.classes).forEach(([val, geom]) => {
+                    try { if (geom.contains(pGeom) || geom.intersects(pGeom)) foundValues.push(val); } catch(e){}
+                });
+                res.points.classif[cov.name][p.id] = foundValues.length ? foundValues.join("; ") : "SIN_DATO";
+            });
+        });
+    }
+
+    // --- LINEAS ---
+    if (data.lines.length > 0) {
+        res.lines = {
+            ids: data.lines.map(l => l.id),
+            verts: {}, 
+            classif: {} 
+        };
+        data.lines.forEach(l => { res.lines.verts[l.id] = l.geom.map((v, i) => ({ id: i+1, x: v[0].toFixed(2), y: v[1].toFixed(2) })); });
+        
+        for (const cov of coverages) {
+            res.lines.classif[cov.name] = {};
+            if (cov.error) {
+                res.lines.classif[cov.name]["ERROR_CAPA"] = {};
+                data.lines.forEach(l => res.lines.classif[cov.name]["ERROR_CAPA"][l.id] = 0);
+                continue; 
+            }
+            
+            cov.classValues.forEach(val => {
+                res.lines.classif[cov.name][val] = {};
+                data.lines.forEach(l => res.lines.classif[cov.name][val][l.id] = 0);
+            });
+            
+            for (const l of data.lines) {
+                const lGeom = toJSTSGeometry('lines', l.geom);
+                if(!lGeom) continue;
+                let remaining = lGeom;
+
+                for (const val of cov.classValues) {
+                    if (!remaining || remaining.isEmpty()) continue;
+                    const inter = safeIntersection(remaining, cov.classes[val]);
+                    // CALCULA LONGITUD EN METROS PARA LÍNEAS
+                    const assignedLen = inter ? inter.getLength() : 0;
+                    res.lines.classif[cov.name][val][l.id] += assignedLen;
+                    remaining = safeDifference(remaining, cov.classes[val]) || remaining;
+                }
+
+                if(!res.lines.classif[cov.name]["SIN_DATO"]) res.lines.classif[cov.name]["SIN_DATO"] = {};
+                res.lines.classif[cov.name]["SIN_DATO"][l.id] = (res.lines.classif[cov.name]["SIN_DATO"][l.id] || 0) + (remaining ? remaining.getLength() : 0);
+            }
+            // Dar respiro a la UI tras cada capa
+            await updateStatus(`Calculando distancias (m) de línea: ${cov.name}...`);
+        }
+    }
+
+    // --- POLIGONOS ---
+    if (data.polygons.length > 0) {
+        res.polygons = {
+            ids: data.polygons.map(p => p.id),
+            verts: {},
+            classif: {}
+        };
+        data.polygons.forEach(p => { res.polygons.verts[p.id] = p.geom.map((v, i) => ({ id: i+1, x: v[0].toFixed(2), y: v[1].toFixed(2) })); });
+        
+        for (const cov of coverages) {
+            res.polygons.classif[cov.name] = {};
+            if (cov.error) { 
+                res.polygons.classif[cov.name]["ERROR_CAPA"] = {};
+                data.polygons.forEach(p => res.polygons.classif[cov.name]["ERROR_CAPA"][p.id] = 0);
+                continue; 
+            }
+            
+            cov.classValues.forEach(val => {
+                res.polygons.classif[cov.name][val] = {};
+                data.polygons.forEach(p => res.polygons.classif[cov.name][val][p.id] = 0);
+            });
+            
+            for (const p of data.polygons) {
+                const pGeom = toJSTSGeometry('polygons', p.geom);
+                if(!pGeom) continue;
+                let remaining = pGeom;
+
+                for (const val of cov.classValues) {
+                    if (!remaining || remaining.isEmpty()) continue;
+                    const inter = safeIntersection(remaining, cov.classes[val]);
+                    // CALCULA ÁREA EN HECTÁREAS PARA POLÍGONOS
+                    const assignedHa = inter ? inter.getArea() / 10000 : 0; 
+                    res.polygons.classif[cov.name][val][p.id] += assignedHa;
+                    remaining = safeDifference(remaining, cov.classes[val]) || remaining;
+                }
+
+                if(!res.polygons.classif[cov.name]["SIN_DATO"]) res.polygons.classif[cov.name]["SIN_DATO"] = {};
+                res.polygons.classif[cov.name]["SIN_DATO"][p.id] = (res.polygons.classif[cov.name]["SIN_DATO"][p.id] || 0) + (remaining ? remaining.getArea() / 10000 : 0);
+            }
+            // Dar respiro a la UI tras cada capa
+            await updateStatus(`Calculando áreas (Ha) de polígono: ${cov.name}...`);
+        }
+    }
+    
+    await updateStatus("Generando reporte...");
+    return res;
+}
+
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+// 📊 MÓDULO DE REPORTES Y TABLAS (ZONA DE EDICIÓN FÁCIL)
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+
+function renderAnalysisUI(res) {
+    let html = "";
+    
+    // --- SECCIÓN PUNTOS ---
+    if (res.points) {
+        html += `<div class="report-section"><h4>📍 Puntos</h4>`;
+        html += `<div class="report-table-wrapper"><table class="report-table">
+            <thead><tr><th colspan="3">Tabla DESCRIPCIÓN DE PUNTOS</th></tr><tr><th>ID</th><th>X</th><th>Y</th></tr></thead><tbody>`;
+        res.points.desc.forEach(p => { html += `<tr><td>${p.id}</td><td>${p.x}</td><td>${p.y}</td></tr>`; });
+        html += `</tbody></table></div>`;
+        
+        html += `<div class="report-table-wrapper"><table class="report-table">
+            <thead><tr><th colspan="${res.points.ids.length + 1}">Tabla CLASIFICACIÓN EN CAPAS DE COBERTURA</th></tr>
+            <tr><th>CAPA DE COBERTURA</th>${res.points.ids.map(id => `<th>${id}</th>`).join('')}</tr></thead><tbody>`;
+        for (const [layerName, values] of Object.entries(res.points.classif)) {
+            html += `<tr><td>${layerName}</td>${res.points.ids.map(id => `<td>${values[id] || '-'}</td>`).join('')}</tr>`;
+        }
+        html += `</tbody></table></div></div>`;
+    }
+
+    // --- SECCIÓN LÍNEAS ---
+    if (res.lines) {
+        html += `<div class="report-section"><h4>📏 Líneas</h4>`;
+        html += `<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>Tabla DESCRIPCIÓN DE LÍNEAS</th></tr></thead><tbody><tr><td>LÍNEA ID: ${res.lines.ids.join(', ')}</td></tr></tbody></table></div>`;
+        
+        html += `<div class="report-table-wrapper"><table class="report-table"><thead><tr><th colspan="3">Tabla DESCRIPCIÓN DE VÉRTICES</th></tr><tr><th>ID (Vértice)</th><th>X</th><th>Y</th></tr></thead><tbody>`;
+        res.lines.ids.forEach(l_id => {
+            html += `<tr style="background:var(--surface-2)"><td colspan="3" style="font-weight:bold;text-align:center;">LÍNEA ID: ${l_id}</td></tr>`;
+            res.lines.verts[l_id].forEach(v => { html += `<tr><td>${v.id}</td><td>${v.x}</td><td>${v.y}</td></tr>`; });
+        });
+        html += `</tbody></table></div>`;
+        
+        html += `<div class="report-table-wrapper"><table class="report-table">
+            <thead><tr><th colspan="${res.lines.ids.length + 2}">Tabla CLASIFICACIÓN EN CAPAS DE COBERTURA (Longitud en m)</th></tr>
+            <tr><th>CAPA DE COBERTURA</th><th>VALOR ATRIBUTO</th>${res.lines.ids.map(id => `<th>${id}</th>`).join('')}</tr></thead><tbody>`;
+        for (const [layerName, valsMap] of Object.entries(res.lines.classif)) {
+            const vals = Object.keys(valsMap).sort();
+            vals.forEach((v, idx) => {
+                html += `<tr>`;
+                if(idx === 0) html += `<td rowspan="${vals.length}" style="vertical-align:middle; font-weight:bold;">${layerName}</td>`;
+                html += `<td>${v}</td>${res.lines.ids.map(id => `<td>${(valsMap[v][id] || 0).toFixed(2)}</td>`).join('')}</tr>`;
+            });
+        }
+        html += `</tbody></table></div></div>`;
+    }
+
+    // --- SECCIÓN POLÍGONOS ---
+    if (res.polygons) {
+        html += `<div class="report-section"><h4>⬡ Polígonos</h4>`;
+        html += `<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>Tabla DESCRIPCIÓN DE POLÍGONOS</th></tr></thead><tbody><tr><td>POLÍGONO ID: ${res.polygons.ids.join(', ')}</td></tr></tbody></table></div>`;
+        
+        html += `<div class="report-table-wrapper"><table class="report-table"><thead><tr><th colspan="3">Tabla DESCRIPCIÓN DE VÉRTICES</th></tr><tr><th>ID (Vértice)</th><th>X</th><th>Y</th></tr></thead><tbody>`;
+        res.polygons.ids.forEach(p_id => {
+            html += `<tr style="background:var(--surface-2)"><td colspan="3" style="font-weight:bold;text-align:center;">POLÍGONO ID: ${p_id}</td></tr>`;
+            res.polygons.verts[p_id].forEach(v => { html += `<tr><td>${v.id}</td><td>${v.x}</td><td>${v.y}</td></tr>`; });
+        });
+        html += `</tbody></table></div>`;
+        
+        html += `<div class="report-table-wrapper"><table class="report-table">
+            <thead><tr><th colspan="${res.polygons.ids.length + 2}">Tabla CLASIFICACIÓN EN CAPAS DE COBERTURA (Área en ha)</th></tr>
+            <tr><th>CAPA DE COBERTURA</th><th>VALOR ATRIBUTO</th>${res.polygons.ids.map(id => `<th>${id}</th>`).join('')}</tr></thead><tbody>`;
+        for (const [layerName, valsMap] of Object.entries(res.polygons.classif)) {
+            const vals = Object.keys(valsMap).sort();
+            vals.forEach((v, idx) => {
+                html += `<tr>`;
+                if(idx === 0) html += `<td rowspan="${vals.length}" style="vertical-align:middle; font-weight:bold;">${layerName}</td>`;
+                html += `<td>${v}</td>${res.polygons.ids.map(id => `<td>${(valsMap[v][id] || 0).toFixed(4)}</td>`).join('')}</tr>`;
+            });
+        }
+        html += `</tbody></table></div></div>`;
+    }
+    
+    document.getElementById('report-container').innerHTML = html;
+}
+
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+// 💾 MÓDULO DE EXPORTACIÓN EXCEL / ZIP
+// 🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩🟩
+
+async function downloadReport() {
+    if (!globalAnalysisResults && (data.polygons.length + data.lines.length + data.points.length) === 0) return alert("Sin datos");
+    
+    fitMapToAll();
+    const btn = document.getElementById('btn-download-report');
+    const originalText = btn.innerText;
+    btn.innerText = "⏳ Capturando y empaquetando...";
+    await new Promise(resolve => setTimeout(resolve, 3000));
+    
+    const zip = new JSZip();
+    const dateStr = new Date().toISOString().slice(0,10);
+
+    if (globalAnalysisResults) {
+        const wb = XLSX.utils.book_new();
+        const r = globalAnalysisResults;
+        
+        if (r.points) {
+            let descP = [["ID", "X", "Y"]];
+            r.points.desc.forEach(p => descP.push([p.id, parseFloat(p.x), parseFloat(p.y)]));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(descP), "PUNTOS_DESC");
+            
+            let classifP = [["CAPA DE COBERTURA", ...r.points.ids]];
+            for (const [layer, vals] of Object.entries(r.points.classif)) {
+                let row = [layer];
+                r.points.ids.forEach(id => row.push(vals[id] || 'SIN_DATO'));
+                classifP.push(row);
+            }
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(classifP), "PUNTOS_CLASIF");
+        }
+        if (r.lines) {
+            let descL = [["LINEAS_IDS"]]; r.lines.ids.forEach(id => descL.push([id]));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(descL), "LINEAS_DESC");
+            
+            let vertL = [["LINEA_ID", "ID_VERTICE", "X", "Y"]];
+            r.lines.ids.forEach(lid => { r.lines.verts[lid].forEach(v => { vertL.push([lid, v.id, parseFloat(v.x), parseFloat(v.y)]); }); });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vertL), "LINEAS_VERTICES");
+            
+            let classifL = [["CAPA DE COBERTURA", "VALOR ATRIBUTO", ...r.lines.ids]];
+            for (const [layer, valsMap] of Object.entries(r.lines.classif)) {
+                Object.keys(valsMap).sort().forEach(val => {
+                    let row = [layer, val];
+                    r.lines.ids.forEach(id => row.push(valsMap[val][id] || 0));
+                    classifL.push(row);
+                });
+            }
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(classifL), "LINEAS_CLASIF_M");
+        }
+        if (r.polygons) {
+            let descPo = [["POLIGONOS_IDS"]]; r.polygons.ids.forEach(id => descPo.push([id]));
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(descPo), "POLIG_DESC");
+            
+            let vertPo = [["POLIGONO_ID", "ID_VERTICE", "X", "Y"]];
+            r.polygons.ids.forEach(pid => { r.polygons.verts[pid].forEach(v => { vertPo.push([pid, v.id, parseFloat(v.x), parseFloat(v.y)]); }); });
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(vertPo), "POLIG_VERTICES");
+            
+            let classifPo = [["CAPA DE COBERTURA", "VALOR ATRIBUTO", ...r.polygons.ids]];
+            for (const [layer, valsMap] of Object.entries(r.polygons.classif)) {
+                Object.keys(valsMap).sort().forEach(val => {
+                    let row = [layer, val];
+                    r.polygons.ids.forEach(id => row.push(valsMap[val][id] || 0));
+                    classifPo.push(row);
+                });
+            }
+            XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(classifPo), "POLIG_CLASIF_HA");
+        }
+        
+        const wbout = XLSX.write(wb, {bookType:'xlsx', type:'array'});
+        zip.file(`resultados_detallados_${dateStr}.xlsx`, wbout);
+        
+        const rawHTML = `<html><head><meta charset="utf-8"><title>Reporte GIS</title><style>body{font-family:sans-serif;} table{border-collapse:collapse; width:100%; margin-bottom:20px;} th,td{border:1px solid #ccc; padding:8px; text-align:left;} th{background:#eee;}</style></head><body>` + document.getElementById('report-container').innerHTML + `</body></html>`;
+        zip.file(`reporte_web_${dateStr}.html`, rawHTML);
+    }
+
+    let csv = "ID,TIPO,X_ESTE,Y_NORTE,AREA_HA_LONG_KM\n";
+    data.points.forEach(p => csv += `${p.id},PUNTO,${p.geom[0]},${p.geom[1]},-\n`);
+    data.lines.forEach(l => { let len = 0; for(let i=0; i<l.geom.length-1; i++) len += Math.sqrt(Math.pow(l.geom[i+1][0]-l.geom[i][0],2) + Math.pow(l.geom[i+1][1]-l.geom[i][1],2)); csv += `${l.id},LINEA,-,-,${(len/1000).toFixed(4)}\n`; });
+    data.polygons.forEach(p => { let area = 0; for (let i = 0; i < p.geom.length - 1; i++) area += p.geom[i][0] * p.geom[i+1][1] - p.geom[i+1][0] * p.geom[i][1]; csv += `${p.id},POLIGONO,-,-,${(Math.abs(area)/20000).toFixed(4)}\n`; });
+    zip.file(`reporte_basico_${dateStr}.csv`, csv);
+
+    const crs8908 = { "type": "name", "properties": { "name": "urn:ogc:def:crs:EPSG::8908" } };
+    if (data.points.length > 0) zip.file("puntos_8908.geojson", JSON.stringify({ type: "FeatureCollection", crs: crs8908, features: data.points.map(p => ({ type: "Feature", properties: { id: p.id }, geometry: { type: "Point", coordinates: p.geom } }))}));
+    if (data.lines.length > 0) zip.file("lineas_8908.geojson", JSON.stringify({ type: "FeatureCollection", crs: crs8908, features: data.lines.map(l => ({ type: "Feature", properties: { id: l.id }, geometry: { type: "LineString", coordinates: l.geom } }))}));
+    if (data.polygons.length > 0) zip.file("poligonos_8908.geojson", JSON.stringify({ type: "FeatureCollection", crs: crs8908, features: data.polygons.map(p => ({ type: "Feature", properties: { id: p.id }, geometry: { type: "Polygon", coordinates: [p.geom] } }))}));
+
+    try {
+        const contrasts = document.querySelectorAll('.contrast-tiles'); contrasts.forEach(el => el.classList.remove('contrast-tiles'));
+        const canvas = await html2canvas(document.getElementById('map'), { useCORS: true, allowTaint: false, ignoreElements: (el) => el.id === 'layers-panel', scrollX: 0, scrollY: 0, logging: false });
+        const imgData = canvas.toDataURL('image/png').split(',')[1];
+        zip.file(`vista_mapa_${dateStr}.png`, imgData, {base64: true});
+        contrasts.forEach(el => el.classList.add('contrast-tiles'));
+    } catch (e) { console.warn("No se pudo capturar el mapa:", e); }
+
+    btn.innerText = originalText;
+    zip.generateAsync({type:"blob"}).then(function(content) { saveAs(content, `GIS_Cobertura_CR_${dateStr}.zip`); });
+}
+
+// =========================================================================
+// 🚀 ACTIVADOR DE SERVICE WORKER PARA GITHUB PAGES (PWA)
+// =========================================================================
+if ('serviceWorker' in navigator && window.location.protocol === 'https:') {
+    window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('✅ PWA lista: ServiceWorker registrado', reg.scope))
+            .catch(err => console.warn('PWA: No se pudo registrar SW (normal en localhost)', err));
+    });
+}
+</script>
+
+<!-- ========================================================================= -->
+<!-- 📁 INSTRUCCIONES Y CÓDIGO PARA LOS ARCHIVOS DE GITHUB PAGES -->
+<!-- ========================================================================= -->
+
+<!-- 1. CÓDIGO PARA TU ARCHIVO: manifest.json (Cópialo y guárdalo en Github) -->
+<script id="pwa-manifest-template" type="application/json">
+{
+  "name": "GIS Cobertura CR v6.5",
+  "short_name": "GIS CR",
+  "description": "Sistema de Análisis Espacial de Cobertura Forestal",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#eceff1",
+  "theme_color": "#2e7d32",
+  "icons": [
+    {
+      "src": "https://www.sirefor.go.cr/images/favicon.ico",
+      "sizes": "192x192",
+      "type": "image/x-icon"
+    }
+  ]
+}
+</script>
+
+<!-- 2. CÓDIGO PARA TU ARCHIVO: sw.js (Cópialo y guárdalo en Github) -->
+<script id="pwa-sw-template" type="text/plain">
+const CACHE_NAME = 'gis-cr-cache-v6.5';
+const urlsToCache = [
+  './index.html',
+  './manifest.json',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css',
+  'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/proj4js/2.9.2/proj4.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jsts/2.9.3/jsts.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/shpjs/4.0.4/shp.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
+  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
+];
+
+self.addEventListener('install', event => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then(cache => cache.addAll(urlsToCache))
+  );
+});
+
+self.addEventListener('fetch', event => {
+  if (event.request.method !== 'GET' || event.request.url.includes('wfs')) return;
+  event.respondWith(
+    caches.match(event.request).then(response => response || fetch(event.request))
+  );
+});
+</script>
+
+</body>
+</html>
