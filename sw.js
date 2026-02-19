@@ -1,7 +1,7 @@
-const CACHE_NAME = 'gis-cr-cache-v6.5';
+const CACHE_NAME = 'gis-cr-cache-v6.6';
 
-// Lista de archivos exacta sin enlaces markdown
 const urlsToCache = [
+  './',
   './index.html',
   './manifest.json',
   'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css',
@@ -18,28 +18,36 @@ const urlsToCache = [
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then(cache => {
-      console.log('Abriendo caché y guardando archivos...');
-      return cache.addAll(urlsToCache);
+    caches.open(CACHE_NAME).then(async cache => {
+      console.log('Abriendo caché y guardando archivos (modo seguro)...');
+      // Guarda archivo por archivo para que no colapse si uno falla
+      for (const url of urlsToCache) {
+        try {
+          await cache.add(url);
+          console.log('✅ Caché exitoso:', url);
+        } catch (error) {
+          console.error('❌ Fallo al guardar en caché (se ignorará):', url, error);
+        }
+      }
     })
   );
+  self.skipWaiting();
 });
 
 self.addEventListener('fetch', event => {
-  // Ignorar peticiones WFS/WMS para que siempre busque datos frescos
+  // Ignorar peticiones WFS/WMS para que siempre busque datos frescos de servidores
   if (event.request.method !== 'GET' || event.request.url.includes('wfs') || event.request.url.includes('wms')) {
     return;
   }
   
   event.respondWith(
     caches.match(event.request).then(response => {
-      // Si el archivo está en caché, lo devuelve. Si no, lo descarga de internet.
       return response || fetch(event.request);
     })
   );
 });
 
-// Limpieza de cachés antiguas si actualizas la versión
+// Limpieza de cachés antiguas 
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
@@ -53,4 +61,5 @@ self.addEventListener('activate', event => {
       );
     })
   );
+  self.clients.claim();
 });
