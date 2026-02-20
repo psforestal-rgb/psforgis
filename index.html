@@ -557,7 +557,7 @@ const DEFAULT_LAYERS = [
 let config = JSON.parse(localStorage.getItem('giscr_config') || JSON.stringify(DEFAULT_LAYERS));
 
 // ===================== WORKER DE CLOUDFLARE =====================
-const OGC_PROXY_BASE = 'https://psforgis-ocg.psforestal.workers.dev/ogc?u=';
+const OGC_PROXY_BASE = 'https://ocg-psfor.psforestal.workers.dev/ogc?u=';
 
 function buildOgcProxyUrl(targetUrl) {
     return `${OGC_PROXY_BASE}${encodeURIComponent(String(targetUrl))}`;
