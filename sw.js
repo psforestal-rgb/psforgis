@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gis-cr-cache-v6.6.2-final';
+const CACHE_NAME = 'gis-cr-cache-v6.6.3-final';
 const urlsToCache = [
   './',
   './index.html',
@@ -11,20 +11,18 @@ const urlsToCache = [
   'https://cdnjs.cloudflare.com/ajax/libs/togeojson/0.16.0/togeojson.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js',
-  'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js'
+  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
-      console.log('Abriendo caché y guardando archivos (modo seguro)...');
+      console.log('Instalando caché de PWA...');
       for (const url of urlsToCache) {
         try {
           await cache.add(url);
-          console.log('✅ Caché exitoso:', url);
         } catch (error) {
-          console.error('❌ Fallo al guardar en caché (se ignorará):', url, error);
+          console.warn('Caché ignorado para:', url);
         }
       }
     })
@@ -33,11 +31,19 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  if (event.request.method !== 'GET' || 
-      event.request.url.includes('wfs') || 
-      event.request.url.includes('wms') ||
-      event.request.url.includes('workers.dev')) {
-    return;
+  const urlString = event.request.url.toLowerCase();
+  
+  // EXCLUSIÓN ESTRICTA DE CACHÉ PARA APIS Y WORKERS
+  if (
+    event.request.method !== 'GET' || 
+    urlString.includes('wfs') || 
+    urlString.includes('wms') ||
+    urlString.includes('workers.dev') ||
+    urlString.includes('sirefor') ||
+    urlString.includes('allorigins') ||
+    urlString.includes('corsproxy')
+  ) {
+    return; // Pasa la petición a la red (Network Only)
   }
   
   event.respondWith(
