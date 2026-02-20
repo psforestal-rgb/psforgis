@@ -557,7 +557,6 @@ const DEFAULT_LAYERS = [
 let config = JSON.parse(localStorage.getItem('giscr_config') || JSON.stringify(DEFAULT_LAYERS));
 
 // ===================== WORKER DE CLOUDFLARE =====================
-// CORREGIDO: el subdominio ahora coincide con tu Worker real (psforgis-ocg)
 const OGC_PROXY_BASE = 'https://psforgis-ocg.psforestal.workers.dev/ogc?u=';
 
 function buildOgcProxyUrl(targetUrl) {
@@ -1669,67 +1668,80 @@ function getLineLength(geom) {
     return len;
 }
 
-// SIMULA UN PINCHAZO PARA UN PUNTO (Descarga solo un cuadrito milimétrico)
+// ==========================================================
+// fetchPointCoverage MEJORADA con reintentos por 413
+// ==========================================================
 async function fetchPointCoverage(pGeom, c) {
     const pLayer = proj4('EPSG:8908', c.srs, pGeom);
-    // Tolerancia diminuta para el BBOX del punto (10 metros o ~0.0001 grados)
-    let tol = (c.srs === 'EPSG:4326') ? 0.0001 : 10; 
-    const bboxStr = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
-    const targetUrl = `${c.wfs}?service=WFS&version=1.0.0&request=GetFeature&typeName=${c.type}&outputFormat=application/json&bbox=${bboxStr}`;
-    
-    try {
-        const rawGeojson = await fetchWithProxyFallback(targetUrl);
-        if (rawGeojson && rawGeojson.features && rawGeojson.features.length > 0) {
-            let ptJsts = jstsReader.read({type: 'Point', coordinates: pGeom});
-            
-            // Busca de forma estricta qué polígono descargado toca realmente el punto
-            for (const f of rawGeojson.features) {
-                if (!f.geometry) continue;
-                let contains = false;
-                try {
-                    const checkRing = (ringCoords) => {
-                        const ring8908 = projectCoordList(ringCoords, c.srs, 'EPSG:8908');
-                        return jstsReader.read({ type: 'Polygon', coordinates: [ensureClosedRing(ring8908)] });
-                    };
-                    if (f.geometry.type === 'Polygon') {
-                        if (checkRing(f.geometry.coordinates[0]).contains(ptJsts)) contains = true;
-                    } else if (f.geometry.type === 'MultiPolygon') {
-                        for (let polyCoords of f.geometry.coordinates) {
-                            if (checkRing(polyCoords[0]).contains(ptJsts)) { contains = true; break; }
-                        }
-                    }
-                } catch(err) {}
+    let tolBase = (c.srs === 'EPSG:4326') ? 0.0001 : 10; // tolerancia base
+    let tol = tolBase;
+    const maxAttempts = 3;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const bboxStr = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
+        const targetUrl = `${c.wfs}?service=WFS&version=1.0.0&request=GetFeature&typeName=${c.type}&outputFormat=application/json&bbox=${bboxStr}`;
+        
+        try {
+            const rawGeojson = await fetchWithProxyFallback(targetUrl);
+            if (rawGeojson && rawGeojson.features && rawGeojson.features.length > 0) {
+                let ptJsts = jstsReader.read({type: 'Point', coordinates: pGeom});
                 
-                if (contains) {
-                    let attrValue = 'SIN_DATO';
-                    if (f.properties) {
-                        const searchKey = c.attr.toLowerCase();
-                        const foundKey = Object.keys(f.properties).find(k => k.toLowerCase() === searchKey);
-                        if (foundKey && f.properties[foundKey] != null) {
-                            attrValue = String(f.properties[foundKey]);
+                // Busca el polígono que contiene el punto
+                for (const f of rawGeojson.features) {
+                    if (!f.geometry) continue;
+                    let contains = false;
+                    try {
+                        const checkRing = (ringCoords) => {
+                            const ring8908 = projectCoordList(ringCoords, c.srs, 'EPSG:8908');
+                            return jstsReader.read({ type: 'Polygon', coordinates: [ensureClosedRing(ring8908)] });
+                        };
+                        if (f.geometry.type === 'Polygon') {
+                            if (checkRing(f.geometry.coordinates[0]).contains(ptJsts)) contains = true;
+                        } else if (f.geometry.type === 'MultiPolygon') {
+                            for (let polyCoords of f.geometry.coordinates) {
+                                if (checkRing(polyCoords[0]).contains(ptJsts)) { contains = true; break; }
+                            }
                         }
+                    } catch(err) {}
+                    
+                    if (contains) {
+                        let attrValue = 'SIN_DATO';
+                        if (f.properties) {
+                            const searchKey = c.attr.toLowerCase();
+                            const foundKey = Object.keys(f.properties).find(k => k.toLowerCase() === searchKey);
+                            if (foundKey && f.properties[foundKey] != null) {
+                                attrValue = String(f.properties[foundKey]);
+                            }
+                        }
+                        return attrValue;
                     }
-                    return attrValue;
                 }
-            }
-            
-            // Fallback: Si el JSTS falló, asumimos el valor del primer polígono cercano devuelto por el BBOX
-            let firstF = rawGeojson.features[0];
-            let attrValue = 'SIN_DATO';
-            if (firstF.properties) {
-                const searchKey = c.attr.toLowerCase();
-                const foundKey = Object.keys(firstF.properties).find(k => k.toLowerCase() === searchKey);
-                if (foundKey && firstF.properties[foundKey] != null) {
-                    attrValue = String(firstF.properties[foundKey]);
+                
+                // Fallback: primer feature
+                let firstF = rawGeojson.features[0];
+                let attrValue = 'SIN_DATO';
+                if (firstF.properties) {
+                    const searchKey = c.attr.toLowerCase();
+                    const foundKey = Object.keys(firstF.properties).find(k => k.toLowerCase() === searchKey);
+                    if (foundKey && firstF.properties[foundKey] != null) {
+                        attrValue = String(firstF.properties[foundKey]);
+                    }
                 }
+                return attrValue;
             }
-            return attrValue;
+            return 'SIN_DATO';
+        } catch (e) {
+            // Si el error es 413 y no es el último intento, reducir tolerancia y reintentar
+            if (e.message && e.message.includes('413') && attempt < maxAttempts - 1) {
+                tol /= 2;
+                console.warn(`🔄 Reintentando punto con tolerancia reducida: ${tol}`);
+                continue;
+            }
+            console.warn("Fallo pinchazo punto:", e);
+            return 'ERROR_RED';
         }
-        return 'SIN_DATO';
-    } catch(e) {
-        console.warn("Fallo pinchazo punto:", e);
-        return 'ERROR_RED';
     }
+    return 'ERROR_RED';
 }
 
 // SIMULA PINCHAZOS SISTEMÁTICOS A LO LARGO DE UNA LÍNEA (Resolución: cada 5 metros)
