@@ -19,7 +19,6 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
       console.log('Abriendo caché y guardando archivos (modo seguro)...');
-      // Guarda archivo por archivo para que no colapse si uno falla
       for (const url of urlsToCache) {
         try {
           await cache.add(url);
@@ -34,7 +33,6 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Ignorar peticiones WFS/WMS y las de nuestro Worker para que siempre busquen datos frescos
   if (event.request.method !== 'GET' || 
       event.request.url.includes('wfs') || 
       event.request.url.includes('wms') ||
@@ -49,7 +47,6 @@ self.addEventListener('fetch', event => {
   );
 });
 
-// Limpieza de cachés antiguas 
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys().then(cacheNames => {
