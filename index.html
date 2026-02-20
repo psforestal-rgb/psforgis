@@ -556,6 +556,14 @@ const DEFAULT_LAYERS = [
 ];
 let config = JSON.parse(localStorage.getItem('giscr_config') || JSON.stringify(DEFAULT_LAYERS));
 
+// ===================== WORKER DE CLOUDFLARE =====================
+// CORREGIDO: el subdominio ahora coincide con tu Worker real (psforgis-ocg)
+const OGC_PROXY_BASE = 'https://psforgis-ocg.psforestal.workers.dev/ogc?u=';
+
+function buildOgcProxyUrl(targetUrl) {
+    return `${OGC_PROXY_BASE}${encodeURIComponent(String(targetUrl))}`;
+}
+
 // ===================== INITIALIZATION =====================
 document.addEventListener('DOMContentLoaded', () => {
     initMap(); 
@@ -1495,6 +1503,132 @@ function getDefaultProxyChain() {
     ];
 }
 
+// Nueva función para detectar excepciones OGC en XML
+function isLikelyOgcException(contentType, text) {
+    const ct = (contentType || '').toLowerCase();
+    const xmlLike = ct.includes('application/vnd.ogc.se_xml') || ct.includes('text/xml') || ct.includes('application/xml');
+    const body = String(text || '');
+    const ogcPattern = /<(ServiceExceptionReport|ServiceException|ExceptionReport|ows:ExceptionReport|Exception|ows:Exception)\b/i;
+    return ogcPattern.test(body) || (xmlLike && ogcPattern.test(body));
+}
+
+// Función mejorada fetchOGC (ya existente, se mantiene)
+async function fetchOGC(targetUrl, options = {}) {
+    const controller = new AbortController();
+    const timeoutMs = (options && typeof options.timeoutMs === 'number') ? options.timeoutMs : 30000;
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+    const method = String(options.method || 'GET').toUpperCase();
+    const responseType = options.responseType || 'auto';
+    const maxRetries = method === 'GET' ? (typeof options.retries === 'number' ? options.retries : 2) : 0;
+
+    const { timeoutMs: _timeout, responseType: _rt, retries: _retries, ...fetchOpts } = options || {};
+    const fetchOptions = { ...fetchOpts, method, signal: controller.signal };
+    const proxyUrl = buildOgcProxyUrl(targetUrl);
+
+    try {
+        let lastError = null;
+        for (let attempt = 0; attempt <= maxRetries; attempt++) {
+            try {
+                const response = await fetch(proxyUrl, fetchOptions);
+                if (!response.ok) {
+                    const errText = await response.text().catch(() => '');
+                    throw new Error(`HTTP ${response.status}: ${errText.slice(0, 240)}`);
+                }
+
+                if (method === 'HEAD') {
+                    return response;
+                }
+
+                const contentType = (response.headers.get('content-type') || '').toLowerCase();
+                const expectBlob = responseType === 'blob' || (responseType === 'auto' && (contentType.startsWith('image/') || contentType.includes('application/octet-stream')));
+                if (expectBlob) return await response.blob();
+
+                const rawText = await response.text();
+                if (isLikelyOgcException(contentType, rawText)) {
+                    throw new Error(`OGC Exception detectada: ${rawText.slice(0, 240)}`);
+                }
+
+                const expectJson = responseType === 'json' || (responseType === 'auto' && (contentType.includes('application/json') || contentType.includes('+json')));
+                if (expectJson) {
+                    try {
+                        return JSON.parse(rawText);
+                    } catch {
+                        throw new Error('Respuesta esperada JSON pero no parseable');
+                    }
+                }
+
+                if (responseType === 'text' || responseType === 'auto') return rawText;
+                return rawText;
+            } catch (err) {
+                lastError = err;
+                if (attempt >= maxRetries) throw err;
+                const backoffMs = 350 * Math.pow(2, attempt);
+                await new Promise(r => setTimeout(r, backoffMs));
+            }
+        }
+
+        throw lastError || new Error('Error de red inesperado');
+    } finally {
+        clearTimeout(t);
+    }
+}
+
+// =========================================================================
+// fetchWithProxyFallback AHORA USA EL WORKER COMO PRIMERA OPCIÓN
+// =========================================================================
+async function fetchWithProxyFallback(targetUrl) {
+    const ctx = getRuntimeNetworkContext();
+    const [baseWfsUrl, queryString = ''] = String(targetUrl).split('?');
+    const plans = [];
+
+    // 1. Nuestro Worker de Cloudflare (si no estamos en file://)
+    if (!ctx.isFileOrigin) {
+        plans.push({
+            label: 'worker-proxy',
+            url: targetUrl,  // fetchOGC construirá la URL con el proxy
+            options: { method: 'GET', responseType: 'json', retries: 2, timeoutMs: 30000 }
+        });
+    }
+
+    // 2. Intento directo (solo si no es file:// y como respaldo)
+    if (!ctx.isFileOrigin) {
+        plans.push({ label: 'direct-get', url: targetUrl, options: { method: 'GET' } });
+        if (queryString) {
+            plans.push({
+                label: 'direct-post',
+                url: baseWfsUrl,
+                options: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: queryString },
+            });
+        }
+    }
+
+    // 3. Proxies públicos como último recurso
+    const proxyChain = getDefaultProxyChain();
+    proxyChain.forEach((proxy, idx) => {
+        const proxyUrl = normalizeProxy(proxy, targetUrl);
+        if (!proxyUrl) return;
+        plans.push({ label: `proxy-${idx + 1}-get`, url: proxyUrl, options: { method: 'GET' } });
+    });
+
+    let lastError = null;
+    for (const plan of plans) {
+        try {
+            // Si el plan es worker-proxy, usamos fetchOGC, que ya maneja reintentos y parseo
+            if (plan.label === 'worker-proxy') {
+                return await fetchOGC(plan.url, plan.options);
+            } else {
+                // Para los demás, usamos fetchJsonStrict (como antes)
+                return await fetchJsonStrict(plan.url, { ...plan.options, timeoutMs: 30000 }, plan.label);
+            }
+        } catch (err) {
+            console.warn(`Fallo ${plan.label}:`, err);
+            lastError = err;
+        }
+    }
+    throw new Error(`Descarga WFS falló. Último error: ${String(lastError)}`);
+}
+
+// La función fetchJsonStrict existente (no modificada)
 async function fetchJsonStrict(url, options, label) {
     const controller = new AbortController();
     const timeoutMs = (options && typeof options.timeoutMs === 'number') ? options.timeoutMs : 30000;
@@ -1519,39 +1653,6 @@ async function fetchJsonStrict(url, options, label) {
     } finally {
         clearTimeout(t);
     }
-}
-
-async function fetchWithProxyFallback(targetUrl, proxyChain = getDefaultProxyChain()) {
-    const ctx = getRuntimeNetworkContext();
-    const [baseWfsUrl, queryString = ''] = String(targetUrl).split('?');
-    const plans = [];
-
-    if (!ctx.isFileOrigin) {
-        plans.push({ label: 'direct-get', url: targetUrl, options: { method: 'GET' } });
-        if (queryString) {
-            plans.push({
-                label: 'direct-post',
-                url: baseWfsUrl,
-                options: { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' }, body: queryString },
-            });
-        }
-    }
-
-    proxyChain.forEach((proxy, idx) => {
-        const proxyUrl = normalizeProxy(proxy, targetUrl);
-        if (!proxyUrl) return;
-        plans.push({ label: `proxy-${idx + 1}-get`, url: proxyUrl, options: { method: 'GET' } });
-    });
-
-    let lastError = null;
-    for (const plan of plans) {
-        try {
-            return await fetchJsonStrict(plan.url, { ...plan.options, timeoutMs: 30000 }, plan.label);
-        } catch (err) {
-            lastError = err;
-        }
-    }
-    throw new Error(`Descarga WFS falló. Último error: ${String(lastError)}`);
 }
 
 // =======================================================================================
