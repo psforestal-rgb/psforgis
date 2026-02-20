@@ -1,5 +1,4 @@
 const CACHE_NAME = 'gis-cr-cache-v6.6';
-
 const urlsToCache = [
   './',
   './index.html',
@@ -35,8 +34,11 @@ self.addEventListener('install', event => {
 });
 
 self.addEventListener('fetch', event => {
-  // Ignorar peticiones WFS/WMS para que siempre busque datos frescos de servidores
-  if (event.request.method !== 'GET' || event.request.url.includes('wfs') || event.request.url.includes('wms')) {
+  // Ignorar peticiones WFS/WMS y las de nuestro Worker para que siempre busquen datos frescos
+  if (event.request.method !== 'GET' || 
+      event.request.url.includes('wfs') || 
+      event.request.url.includes('wms') ||
+      event.request.url.includes('workers.dev')) {
     return;
   }
   
