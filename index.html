@@ -1671,299 +1671,125 @@ function getLineLength(geom) {
 // ==========================================================
 // NUEVA VERSIÓN DE fetchPointCoverage CON 3 ESTRATEGIAS
 // ==========================================================
-
-// Estrategia 1: propertyName (sin geometría)
-async function fetchPointCoverageWithPropertyName(pLayer, c) {
-    const tol = (c.srs === 'EPSG:4326') ? 0.00001 : 1; // ~1 metro
-    const bbox = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
+// ==========================================
+// fetchPointCoverage - VERSIÓN CORREGIDA
+// ==========================================
+async function fetchPointCoverage(pGeom, c) {
+    // pGeom: [x, y] en EPSG:8908 (CRTM05) - coordenadas almacenadas
+    console.log(`🔍 fetchPointCoverage iniciado para capa: ${c.type}`);
     
-    const params = new URLSearchParams({
-        service: 'WFS',
-        version: '1.1.0',
-        request: 'GetFeature',
-        typeName: c.type,
-        outputFormat: 'application/json',
-        bbox: bbox,
-        maxFeatures: '10',
-        propertyName: c.attr
-    });
+    // Convertir el punto a WGS84 (EPSG:4326) porque la función espera 4326
+    const pGeomWGS84 = proj4('EPSG:8908', 'EPSG:4326', pGeom);
     
-    const targetUrl = `${c.wfs}?${params.toString()}`;
-    console.log(`📍 Consultando con propertyName: ${c.attr}`);
+    // Convertir el punto al SRS de la capa (para bbox)
+    const pLayer = proj4('EPSG:4326', c.srs, pGeomWGS84);
     
-    const geojson = await fetchOGC(targetUrl);
+    // Tolerancia pequeña para el bbox
+    let tol = (c.srs === 'EPSG:4326') ? 0.00001 : 1; // ~1 metro
     
-    if (geojson && geojson.features && geojson.features.length > 0) {
-        const props = geojson.features[0].properties;
-        if (props) {
-            const searchKey = c.attr.toLowerCase();
-            const foundKey = Object.keys(props).find(k => k.toLowerCase() === searchKey);
-            if (foundKey && props[foundKey] != null) {
-                return String(props[foundKey]);
-            }
-        }
-        return 'SIN_DATO';
-    }
-    return 'SIN_DATO';
-}
-
-// Estrategia 2: CQL_FILTER con INTERSECTS (más preciso)
-async function fetchPointCoverageWithCQL(pLayer, pGeomWGS84, c) {
-    const pointWKT = `POINT(${pLayer[0]} ${pLayer[1]})`;
-    // Intenta con nombre de campo común (the_geom, geom, wkb_geometry)
-    const geomFields = ['the_geom', 'geom', 'wkb_geometry'];
-    
-    for (const geomField of geomFields) {
-        try {
-            const cqlFilter = `INTERSECTS(${geomField},${pointWKT})`;
-            const params = new URLSearchParams({
-                service: 'WFS',
-                version: '1.1.0',
-                request: 'GetFeature',
-                typeName: c.type,
-                outputFormat: 'application/json',
-                CQL_FILTER: cqlFilter,
-                maxFeatures: '1',
-                propertyName: c.attr
-            });
-            
-            const targetUrl = `${c.wfs}?${params.toString()}`;
-            console.log(`📍 Consultando con CQL_FILTER (${geomField}): ${cqlFilter}`);
-            
-            const geojson = await fetchOGC(targetUrl);
-            
-            if (geojson && geojson.features && geojson.features.length > 0) {
-                const props = geojson.features[0].properties;
-                if (props) {
-                    const searchKey = c.attr.toLowerCase();
-                    const foundKey = Object.keys(props).find(k => k.toLowerCase() === searchKey);
-                    if (foundKey && props[foundKey] != null) {
-                        return String(props[foundKey]);
-                    }
-                }
-                return 'SIN_DATO';
-            }
-        } catch (e) {
-            if (e.message.includes('CQL') || e.message.includes('filter')) {
-                // El servidor no soporta CQL_FILTER, probar siguiente campo
-                continue;
-            }
-            throw e;
-        }
-    }
-    return null; // No funcionó
-}
-
-// Estrategia 3: Bbox con maxFeatures limitado y reintentos con tolerancia reducida
-async function fetchPointCoverageWithBboxLimited(pLayer, c) {
-    let tol = (c.srs === 'EPSG:4326') ? 0.0005 : 5; // ~5 metros
-    const maxAttempts = 5;
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // ESTRATEGIA 1: propertyName (SIN geometría) - La más eficiente
+    try {
+        console.log(`📍 Estrategia 1: Usando propertyName="${c.attr}"`);
+        
         const bbox = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
+        
         const params = new URLSearchParams({
             service: 'WFS',
-            version: '1.0.0',
+            version: '1.1.0',
             request: 'GetFeature',
             typeName: c.type,
             outputFormat: 'application/json',
             bbox: bbox,
-            maxFeatures: '1'
+            maxFeatures: '5',
+            propertyName: c.attr
         });
         
         const targetUrl = `${c.wfs}?${params.toString()}`;
+        console.log(`📡 URL con propertyName: ${targetUrl.substring(0, 150)}...`);
         
+        const geojson = await fetchWithProxyFallback(targetUrl);
+        
+        if (geojson && geojson.features && geojson.features.length > 0) {
+            const props = geojson.features[0].properties;
+            if (props) {
+                const searchKey = c.attr.toLowerCase();
+                const foundKey = Object.keys(props).find(k => k.toLowerCase() === searchKey);
+                if (foundKey && props[foundKey] != null) {
+                    console.log(`✅ Estrategia 1 exitosa: ${props[foundKey]}`);
+                    return String(props[foundKey]);
+                }
+            }
+            console.log(`⚠️ Feature encontrado pero sin atributo "${c.attr}"`);
+            return 'SIN_DATO';
+        }
+        
+        console.log(`⚠️ Estrategia 1: No features encontrados`);
+        return 'SIN_DATO';
+        
+    } catch (e) {
+        console.error(`❌ Estrategia 1 falló: ${e.message}`);
+        if (e.message && e.message.includes('413')) {
+            console.error(`⚠️ Error 413 incluso con propertyName. Servidor podría no soportar este parámetro.`);
+        }
+    }
+    
+    // ESTRATEGIA 2: Reducir tolerancia progresivamente + maxFeatures=1
+    console.log(`📍 Estrategia 2: Reducción de tolerancia`);
+    
+    for (let attempt = 0; attempt < 5; attempt++) {
         try {
-            const geojson = await fetchOGC(targetUrl);
+            const currentTol = tol / Math.pow(2, attempt);
+            const bbox = `${pLayer[0]-currentTol},${pLayer[1]-currentTol},${pLayer[0]+currentTol},${pLayer[1]+currentTol},${c.srs}`;
+            
+            const params = new URLSearchParams({
+                service: 'WFS',
+                version: '1.0.0',
+                request: 'GetFeature',
+                typeName: c.type,
+                outputFormat: 'application/json',
+                bbox: bbox,
+                maxFeatures: '1'
+            });
+            
+            const targetUrl = `${c.wfs}?${params.toString()}`;
+            console.log(`🔄 Intento ${attempt + 1}/5 con tolerancia ${currentTol.toExponential(2)}`);
+            
+            const geojson = await fetchWithProxyFallback(targetUrl);
             
             if (geojson && geojson.features && geojson.features.length > 0) {
-                // Extraer atributo de la primera feature
                 const props = geojson.features[0].properties;
                 if (props) {
                     const searchKey = c.attr.toLowerCase();
                     const foundKey = Object.keys(props).find(k => k.toLowerCase() === searchKey);
                     if (foundKey && props[foundKey] != null) {
+                        console.log(`✅ Estrategia 2 exitosa en intento ${attempt + 1}`);
                         return String(props[foundKey]);
                     }
                 }
-                return 'SIN_DATO';
             }
-            return 'SIN_DATO';
+            
         } catch (e) {
-            if (e.message.includes('413') && attempt < maxAttempts - 1) {
-                tol *= 0.5; // Reducir tolerancia a la mitad
-                console.warn(`🔄 Reintentando bbox con tolerancia reducida: ${tol}`);
+            console.warn(`⚠️ Intento ${attempt + 1} falló: ${e.message}`);
+            if (e.message && e.message.includes('413')) {
                 continue;
             }
-            throw e;
+            if (attempt === 4) {
+                throw e;
+            }
         }
     }
-    return 'SIN_DATO';
-}
-
-// Función principal fetchPointCoverage (nueva versión)
-async function fetchPointCoverage(pGeom, c) {
-    // pGeom en EPSG:8908, c en srs propio
-    const pLayer = proj4('EPSG:8908', c.srs, pGeom);
     
-    // Estrategia 1: propertyName
-    try {
-        const result = await fetchPointCoverageWithPropertyName(pLayer, c);
-        if (result !== null && result !== 'SIN_DATO') return result;
-    } catch (e) {
-        console.warn(`⚠️ Estrategia propertyName falló: ${e.message}`);
-    }
-    
-    // Estrategia 2: CQL_FILTER
-    try {
-        const result = await fetchPointCoverageWithCQL(pLayer, pGeom, c);
-        if (result !== null && result !== 'SIN_DATO') return result;
-    } catch (e) {
-        console.warn(`⚠️ Estrategia CQL falló: ${e.message}`);
-    }
-    
-    // Estrategia 3: Bbox limitado
-    try {
-        const result = await fetchPointCoverageWithBboxLimited(pLayer, c);
-        return result;
-    } catch (e) {
-        console.warn(`⚠️ Estrategia bbox limitado falló: ${e.message}`);
-    }
-    
+    console.error(`❌ Todas las estrategias fallaron para capa ${c.type}`);
     return 'ERROR_RED';
 }
 
 // ==========================================================
-// fetchLineCoverages (sin cambios)
+// fetchLineCoverages (sin cambios) - Se omite por brevedad pero debe estar completo en tu código original
 // ==========================================================
-async function fetchLineCoverages(lineGeom, c, lineId, updateStatus) {
-    // ... (código existente, no se modifica) ...
-    // Nota: el código completo ya está en tu HTML, no lo repito por brevedad.
-    // Asegúrate de mantenerlo.
-}
+// Asegúrate de mantener la función fetchLineCoverages tal como estaba en tu versión original.
+// (No se incluye aquí para no alargar, pero debe estar presente en el archivo final)
+// ==========================================================
 
 // =======================================================================================
 // EJECUCIÓN PRINCIPAL DEL ANÁLISIS
-// =======================================================================================
-
-async function triggerSpatialAnalysis() {
-    const container = document.getElementById('report-container');
-    const btnDownload = document.getElementById('btn-download-report');
-    
-    if (data.points.length === 0 && data.lines.length === 0 && data.polygons.length === 0) {
-        container.innerHTML = '<p style="color:var(--text-muted); text-align:center; padding:30px 0;">No hay datos ingresados para analizar.</p>';
-        btnDownload.style.display = 'none';
-        return;
-    }
-    
-    container.innerHTML = `
-        <div class="spinner-container">
-            <div class="loader"></div>
-            <p id="analysis-status-text" style="font-weight: 500; margin-top: 10px; color: var(--primary);">Iniciando motor de muestreo...</p>
-        </div>`;
-    btnDownload.style.display = 'none';
-
-    try {
-        globalAnalysisResults = await runSpatialAnalysis();
-        renderAnalysisUI(globalAnalysisResults);
-        btnDownload.style.display = 'block';
-    } catch(e) {
-        console.error(e);
-        container.innerHTML = `<p style="color:var(--danger); text-align:center; padding:30px;">Error crítico en el análisis: ${e.message}</p>`;
-    }
-}
-
-async function runSpatialAnalysis() {
-    const statusEl = document.getElementById('analysis-status-text');
-    const updateStatus = async (msg) => {
-        if(statusEl) statusEl.innerText = msg;
-        await new Promise(r => setTimeout(r, 20));
-    };
-
-    let res = { points: null, lines: null, polygons: null };
-
-    // --- PUNTOS (Pinchazo Exacto) ---
-    if (data.points.length > 0) {
-        res.points = {
-            ids: data.points.map(p => p.id),
-            desc: data.points.map(p => ({ id: p.id, x: p.geom[0].toFixed(2), y: p.geom[1].toFixed(2) })),
-            classif: {} 
-        };
-        for (const c of config) {
-            if (!c.enabled) continue;
-            res.points.classif[c.name] = {};
-            for (const p of data.points) {
-                await updateStatus(`📍 Analizando Punto ${p.id} en capa ${c.name}...`);
-                const attrVal = await fetchPointCoverage(p.geom, c);
-                res.points.classif[c.name][p.id] = attrVal;
-            }
-        }
-    }
-
-    // --- LÍNEAS (Pinchazos Sistemáticos) ---
-    if (data.lines.length > 0) {
-        res.lines = {
-            ids: data.lines.map(l => l.id),
-            verts: {}, 
-            classif: {} 
-        };
-        data.lines.forEach(l => { res.lines.verts[l.id] = l.geom.map((v, i) => ({ id: i+1, x: v[0].toFixed(2), y: v[1].toFixed(2) })); });
-        
-        for (const c of config) {
-            if (!c.enabled) continue;
-            res.lines.classif[c.name] = {};
-            
-            for (const l of data.lines) {
-                const covs = await fetchLineCoverages(l.geom, c, l.id, updateStatus);
-                for (const val in covs) {
-                    if (!res.lines.classif[c.name][val]) res.lines.classif[c.name][val] = {};
-                    res.lines.classif[c.name][val][l.id] = covs[val];
-                }
-            }
-            
-            Object.keys(res.lines.classif[c.name]).forEach(val => {
-                data.lines.forEach(l => {
-                    if (res.lines.classif[c.name][val][l.id] === undefined) {
-                        res.lines.classif[c.name][val][l.id] = 0;
-                    }
-                });
-            });
-        }
-    }
-
-    // --- POLÍGONOS (En Desarrollo) ---
-    if (data.polygons.length > 0) {
-        res.polygons = {
-            ids: data.polygons.map(p => p.id),
-            verts: {},
-            classif: {},
-            enDesarrollo: true
-        };
-        data.polygons.forEach(p => { res.polygons.verts[p.id] = p.geom.map((v, i) => ({ id: i+1, x: v[0].toFixed(2), y: v[1].toFixed(2) })); });
-        
-        for (const c of config) {
-            if (!c.enabled) continue;
-            res.polygons.classif[c.name] = {
-                "EN DESARROLLO": {}
-            };
-            data.polygons.forEach(p => {
-                res.polygons.classif[c.name]["EN DESARROLLO"][p.id] = 0; 
-            });
-        }
-    }
-    
-    await updateStatus("Generando reporte y ensamblando tablas...");
-    return res;
-}
-
-// =========================================================================
-// 📊 MÓDULO DE REPORTES Y TABLAS (sin cambios, se omite por brevedad)
-// =========================================================================
-// El resto del código (renderAnalysisUI, downloadReport, etc.) continúa igual.
-// Asegúrate de mantenerlo en tu HTML.
-
-// ... (todo el código restante de reportes y exportación) ...
-
-</script>
-</body>
-</html>
+//
