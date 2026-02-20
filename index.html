@@ -90,13 +90,13 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
 .inv-badge.active { background: var(--info); color: white; }
 .data-list { max-height: 200px; overflow-y: auto; background: var(--surface-2); border-radius: var(--radius); margin-bottom: 12px; display: none; }
 .data-list.show { display: block; }
-.data-item { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); display: flex; justify-content: space-between; }
+.data-item { padding: 8px 12px; border-bottom: 1px solid var(--border); font-size: 12px; font-family: var(--font-mono); display: flex; justify-content: space-between; align-items: center;}
 #status-bar { height: var(--footer-height); background: rgba(255, 255, 255, 0.95); border-top: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; padding: 0 16px; font-family: var(--font-mono); font-size: 11px; }
 :root[data-theme="dark"] #status-bar { background: rgba(30, 41, 59, 0.95); }
 .scale-input-wrapper { display: flex; align-items: center; border: 1px solid var(--border); border-radius: 4px; padding: 2px 6px; }
 #numeric-scale { background: transparent; border: none; width: 60px; padding: 0; text-align: right; color: var(--primary); font-weight: 700;}
-#map-controls-custom { position: absolute; top: 16px; left: 16px; z-index: 1000; }
-.map-btn { width: 36px; height: 36px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--shadow-md); }
+#map-controls-custom { position: absolute; top: 16px; left: 16px; z-index: 1000; display:flex; flex-direction:column; gap:8px;}
+.map-btn { width: 36px; height: 36px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: var(--shadow-md); font-size:18px;}
 #drawing-tooltip { position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: var(--text-main); color: var(--surface); padding: 8px 16px; border-radius: 20px; font-weight: 600; font-size: 12px; z-index: 2000; display: none; }
 #layers-panel { position: absolute; top: 16px; left: 60px; width: 320px; max-height: 80vh; background: var(--surface); border-radius: var(--radius); z-index: 2000; display: flex; flex-direction: column; overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-lg);}
 #layers-panel.hidden { display: none; }
@@ -127,12 +127,17 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
     <div id="map">
         <div id="drawing-tooltip">Modo Dibujo Activo</div>
         <div id="map-controls-custom">
-            <button class="map-btn" onclick="toggleLayersPanel()">Capas</button>
+            <button class="map-btn" onclick="toggleLayersPanel()" title="Capas">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+            </button>
         </div>
         <div id="layers-panel" class="hidden">
             <div id="layers-panel-header">
                 <h3 style="font-size:13px; margin:0;">Capas del Mapa</h3>
                 <button class="btn-sm btn-secondary" onclick="toggleLayersPanel()">✕</button>
+            </div>
+            <div style="padding: 10px; border-bottom: 1px solid var(--border); background: var(--surface-2);">
+                <input type="text" id="layer-search" placeholder="Buscar capa..." onkeyup="filterLayers(this.value)" style="padding: 6px 10px; font-size: 12px;">
             </div>
             <div id="layers-panel-content"></div>
         </div>
@@ -146,8 +151,11 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
   <div id="sidebar">
     <div id="resizer-handle"></div>
     <div id="sidebar-header">
-      <div class="brand"><h2>GIS Cobertura CR</h2></div>
-      <div><span class="badge">v6.6+</span> <button class="btn-secondary btn-icon-only" onclick="toggleTheme()">◑</button></div>
+      <div class="brand">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+        <h2>GIS Cobertura CR</h2>
+      </div>
+      <div><span class="badge">v6.6+</span> <button class="btn-secondary btn-icon-only" onclick="toggleTheme()" title="Cambiar Tema">◑</button></div>
     </div>
     <div id="topbar">
       <div class="tab active" data-tab="data" onclick="switchMainTab('data')">📁 Datos</div>
@@ -165,16 +173,16 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
               </div>
               <div id="wizard-step-1" class="wizard-step-content">
                   <div class="wizard-cards-grid">
-                      <div class="wizard-card" onclick="selectMethod('manual')">✏️ Dibujar</div>
-                      <div class="wizard-card" onclick="selectMethod('import')">📂 Importar</div>
-                      <div class="wizard-card" onclick="selectMethod('paste')">📋 Pegar</div>
+                      <div class="wizard-card" onclick="selectMethod('manual')"><span style="font-size:24px;">✏️</span> Dibujar</div>
+                      <div class="wizard-card" onclick="selectMethod('import')"><span style="font-size:24px;">📂</span> Importar</div>
+                      <div class="wizard-card" onclick="selectMethod('paste')"><span style="font-size:24px;">📋</span> Pegar</div>
                   </div>
               </div>
               <div id="wizard-step-2" class="wizard-step-content" style="display:none;">
                   <div class="wizard-cards-grid">
-                      <div class="wizard-card" onclick="selectGeometry('point')">● Punto</div>
-                      <div class="wizard-card" onclick="selectGeometry('line')">╱ Línea</div>
-                      <div class="wizard-card" onclick="selectGeometry('polygon')">⬡ Polígono</div>
+                      <div class="wizard-card" onclick="selectGeometry('point')"><span style="font-size:24px;">●</span> Punto</div>
+                      <div class="wizard-card" onclick="selectGeometry('line')"><span style="font-size:24px;">╱</span> Línea</div>
+                      <div class="wizard-card" onclick="selectGeometry('polygon')"><span style="font-size:24px;">⬡</span> Polígono</div>
                   </div>
               </div>
               <div id="wizard-step-3" class="wizard-step-content" style="display:none;">
@@ -207,17 +215,18 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
               </div>
               <div id="input-import" class="legacy-input-container">
                   <div class="card">
+                      <p style="font-size:12px; color:var(--text-muted); margin-bottom:12px;">Soporta: .ZIP (SHP), .GPX, .GEOJSON, .KML</p>
                       <input type="file" id="file-upload" accept=".zip,.gpx,.json,.geojson,.kml" style="margin-bottom:12px;">
-                      <select id="file-epsg" style="margin-bottom:12px;"><option value="8908">8908</option><option value="4326">4326</option></select>
+                      <select id="file-epsg" style="margin-bottom:12px;"><option value="8908">8908 (CRTM05)</option><option value="4326">4326 (WGS84)</option></select>
                       <button class="btn-primary btn-block" onclick="importUniversalFile()">📥 Cargar Archivo</button>
-                      <div id="import-status" style="margin-top:8px; font-size:12px;"></div>
+                      <div id="import-status" style="margin-top:8px; font-size:12px; font-weight:bold;"></div>
                   </div>
               </div>
               <div id="input-paste" class="legacy-input-container">
                   <div class="card">
-                      <textarea id="paste-area" placeholder="ID, X, Y"></textarea>
+                      <textarea id="paste-area" placeholder="Formato: ID, X, Y (separado por tabulador o coma)"></textarea>
                       <select id="paste-epsg" style="margin:12px 0;"><option value="8908">8908</option><option value="4326">4326</option></select>
-                      <button class="btn-primary btn-block" onclick="processPaste()">Procesar</button>
+                      <button class="btn-primary btn-block" onclick="processPaste()">Procesar Texto</button>
                   </div>
                </div>
           </div>
@@ -257,10 +266,11 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
                   <input id="new-url" placeholder="URL WFS" style="margin-bottom:8px;">
                   <input id="new-type" placeholder="TypeName" style="margin-bottom:8px;">
                   <input id="new-attr" placeholder="Atributo" style="margin-bottom:8px;">
+                  <select id="new-srs" style="margin-bottom:12px;"><option value="EPSG:4326">EPSG:4326</option><option value="EPSG:8908">EPSG:8908</option></select>
                   <button class="btn-primary btn-block" onclick="addNewLayer()">➕ Agregar</button>
               </div>
               <div style="display:flex; gap:12px; margin-top:16px;">
-                  <button class="btn-secondary" style="flex:1" onclick="resetConfig()">Restaurar</button>
+                  <button class="btn-secondary" style="flex:1" onclick="resetConfig()">Restaurar Default</button>
               </div>
           </div>
       </div>
@@ -279,7 +289,7 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
 proj4.defs("EPSG:8908", "+proj=tmerc +lat_0=0 +lon_0=-84 +k=0.9999 +x_0=500000 +y_0=0 +ellps=GRS80 +towgs84=0,0,0,0,0,0,0 +units=m +no_defs");
 proj4.defs("EPSG:4326", "+proj=longlat +datum=WGS84 +no_defs");
 
-let map; let layers = {}; let activeWmsLayers = {}; 
+let map; let layerControl; let layers = {}; let activeWmsLayers = {}; 
 let data = { points: [], lines: [], polygons: [] };
 let tempGeom = { type: 'point', vertices: [], id: '' };
 let appState = { inputMethod: 'manual', geoType: 'point', isDrawing: false };
@@ -296,26 +306,44 @@ const DEFAULT_LAYERS = [
 let config = JSON.parse(localStorage.getItem('giscr_config') || JSON.stringify(DEFAULT_LAYERS));
 
 const OGC_PROXY_BASE = 'https://ocg-psfor.psforestal.workers.dev/ogc?u=';
+const INCHES_PER_METER = 39.3701;
+const DPI = 96;
 
+// ==========================================
 // CORE INIT
+// ==========================================
 document.addEventListener('DOMContentLoaded', () => {
     initMap(); initTheme(); renderConfig(); loadDataFromStorage(); renderWizard();
+    initResizer(); initScaleInput();
     document.addEventListener('keydown', (e) => {
         if (!appState.isDrawing) return;
         if (e.key === 'Escape') cancelGeometry();
         if (e.key === 'Enter') finishGeometry();
+        if (e.key === 'Delete' || e.key === 'Backspace') {
+            if (tempGeom.vertices.length > 0) { tempGeom.vertices.pop(); drawTempGeom(); }
+        }
     });
 });
 
 function initMap() {
     map = L.map('map', { zoomControl: false }).setView([9.95, -84.1], 8);
     L.control.zoom({ position: 'topright' }).addTo(map);
-    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:22}).addTo(map);
+    
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:22, attribution:'Esri'});
+    satellite.addTo(map);
+
     layers.points = L.featureGroup().addTo(map); 
     layers.lines = L.featureGroup().addTo(map); 
     layers.polys = L.featureGroup().addTo(map); 
     layers.temp = L.featureGroup().addTo(map);
+
+    window.__basemaps = { "Satélite": satellite };
+    window.__overlays = { "Puntos": layers.points, "Líneas": layers.lines, "Polígonos": layers.polys };
+    updateMapWmsLayers();
+
     map.on('click', onMapClick); 
+    map.on('dblclick', (e) => { if(appState.isDrawing) finishGeometry(); });
+    map.on('moveend zoomend', updateScaleControl);
     map.on('mousemove', e => { 
         const p8908 = proj4("EPSG:4326", "EPSG:8908", [e.latlng.lng, e.latlng.lat]); 
         document.getElementById('coord-wgs').innerText = `Lat: ${e.latlng.lat.toFixed(5)} Lon: ${e.latlng.lng.toFixed(5)}`; 
@@ -323,12 +351,106 @@ function initMap() {
     });
 }
 
-// UI HELPERS
+function initResizer() { 
+    const handle = document.getElementById('resizer-handle'); 
+    const sidebar = document.getElementById('sidebar'); 
+    let isResizing = false; 
+    handle.addEventListener('mousedown', () => { isResizing = true; }); 
+    document.addEventListener('mousemove', (e) => { 
+        if (!isResizing) return; 
+        let w = window.innerWidth - e.clientX; 
+        sidebar.style.width = Math.max(280, w) + 'px'; 
+        map.invalidateSize(); 
+    }); 
+    document.addEventListener('mouseup', () => { isResizing = false; }); 
+}
+
+function getMapScale() { 
+    const center = map.getCenter(); 
+    const metersPerPixel = 156543.03392 * Math.cos(center.lat * Math.PI / 180) / Math.pow(2, map.getZoom()); 
+    return metersPerPixel * INCHES_PER_METER * DPI; 
+}
+function updateScaleControl() { 
+    const input = document.getElementById('numeric-scale'); 
+    if (document.activeElement !== input) input.value = Math.round(getMapScale()).toLocaleString('es-CR'); 
+}
+function initScaleInput() { 
+    const input = document.getElementById('numeric-scale'); 
+    input.addEventListener('keydown', (e) => { 
+        if (e.key === 'Enter') { 
+            const val = parseFloat(input.value.replace(/[^0-9.]/g, '')); 
+            if (val > 0) {
+                const center = map.getCenter(); 
+                const metersPerPixel = val / (INCHES_PER_METER * DPI); 
+                const zoom = Math.log2((156543.03392 * Math.cos(center.lat * Math.PI / 180)) / metersPerPixel); 
+                map.setZoom(zoom);
+            }
+            input.blur(); 
+        } 
+    }); 
+}
+
+// ==========================================
+// CAPAS Y ESTILOS
+// ==========================================
 function toggleTheme() { 
     const t = document.documentElement.getAttribute('data-theme') === 'dark' ? 'light' : 'dark'; 
     document.documentElement.setAttribute('data-theme', t); localStorage.setItem('theme', t); 
 }
 function initTheme() { document.documentElement.setAttribute('data-theme', localStorage.getItem('theme') || 'light'); }
+
+function toggleLayersPanel() { 
+    const p = document.getElementById('layers-panel'); 
+    p.classList.toggle('hidden'); 
+    if (!p.classList.contains('hidden')) renderLayersPanel();
+}
+function renderLayersPanel() {
+    const container = document.getElementById('layers-panel-content'); 
+    container.innerHTML = ''; 
+    const wmsSec = document.createElement('div'); wmsSec.className = 'layer-section';
+    wmsSec.innerHTML = '<h4>Coberturas WMS</h4>';
+    config.forEach(c => { 
+        if (!c.enabled) return; 
+        const layer = activeWmsLayers[c.id]; 
+        if (!layer) return; 
+        const div = document.createElement('div');
+        div.className = 'layer-item';
+        div.style.marginBottom = '8px';
+        div.innerHTML = `<label style="display:flex; justify-content:space-between; text-transform:none; font-weight:normal; font-size:12px;">
+            <span>${c.name}</span>
+            <input type="checkbox" ${map.hasLayer(layer) ? 'checked' : ''} onchange="toggleWms('${c.id}', this.checked)">
+        </label>`;
+        wmsSec.appendChild(div);
+    });
+    container.appendChild(wmsSec);
+}
+function filterLayers(text) {
+    const term = text.toLowerCase();
+    document.querySelectorAll('.layer-item').forEach(el => {
+        el.style.display = el.innerText.toLowerCase().includes(term) ? 'block' : 'none';
+    });
+}
+window.toggleWms = (id, active) => { 
+    const layer = activeWmsLayers[id]; 
+    if (active) map.addLayer(layer); else map.removeLayer(layer); 
+};
+function updateMapWmsLayers() { 
+    config.forEach(c => { 
+        if (!c.enabled) {
+            if(activeWmsLayers[c.id]) { map.removeLayer(activeWmsLayers[c.id]); delete activeWmsLayers[c.id]; }
+            return;
+        }
+        if (!activeWmsLayers[c.id]) {
+            let wmsUrl = c.wfs.endsWith('/wfs') ? c.wfs.substring(0, c.wfs.length - 4) + '/wms' : c.wfs;
+            activeWmsLayers[c.id] = L.tileLayer.wms(wmsUrl, { layers: c.type, format: 'image/png', transparent: true, opacity: 0.75 });
+            activeWmsLayers[c.id].addTo(map);
+        }
+    }); 
+}
+
+// ==========================================
+// WIZARD Y PESTAÑAS
+// ==========================================
 function switchMainTab(t) { 
     document.querySelectorAll('.tab').forEach(el => el.classList.remove('active')); 
     document.querySelector(`[data-tab="${t}"]`).classList.add('active'); 
@@ -336,110 +458,339 @@ function switchMainTab(t) {
     document.getElementById(`panel-${t}`).classList.add('active'); 
     if(t === 'results') triggerSpatialAnalysis(); 
 }
-
-// WIZARD
 function renderWizard() {
     document.querySelectorAll('.wizard-step-content').forEach(e => e.style.display = 'none');
     document.getElementById(`wizard-step-${wizardState.step}`).style.display = 'block';
     document.getElementById('step-text').innerText = `Paso ${wizardState.step}/3`;
-    document.getElementById('wizard-back').style.display = wizardState.step > 1 ? 'block' : 'none';
+    document.getElementById('wizard-back').style.display = wizardState.step > 1 ? 'flex' : 'none';
     if(wizardState.step === 3) {
         const c = document.getElementById('active-form-container');
         const s = document.getElementById('legacy-panels-storage');
         while(c.firstChild) s.appendChild(c.firstChild);
         const t = document.getElementById(`input-${wizardState.method}`);
         t.style.display = 'block'; c.appendChild(t);
+        
+        if (wizardState.method === 'manual') {
+             document.getElementById('man-id').value = (appState.geoType === 'point' ? 'P' : appState.geoType === 'line' ? 'L' : 'POL') + (data[appState.geoType + 's'] || data.polygons).length;
+        }
     }
 }
 function selectMethod(m) { wizardState.method = m; appState.inputMethod = m; wizardState.step = m==='import'?3:2; renderWizard(); }
 function selectGeometry(t) { wizardState.geoType = t; appState.geoType = t; wizardState.step = 3; renderWizard(); }
-function prevStep() { wizardState.step--; renderWizard(); }
-function resetWizard() { wizardState.step = 1; renderWizard(); }
+function prevStep() { wizardState.step = wizardState.step === 3 && wizardState.method === 'import' ? 1 : wizardState.step - 1; renderWizard(); }
+function resetWizard() { wizardState.step = 1; wizardState.method = null; wizardState.geoType = null; renderWizard(); cancelGeometry(); }
 
-// DRAWING / MANUAL
+// ==========================================
+// DIBUJO MANUAL Y CAPTURA
+// ==========================================
+function transformTo8908(x, y, fromEpsg) { 
+    if (fromEpsg === '8908') return [x, y]; 
+    return proj4(`EPSG:${fromEpsg}`, "EPSG:8908", [x, y]); 
+}
+
 function toggleDrawingMode() { 
     appState.isDrawing = !appState.isDrawing; 
-    document.getElementById('map').classList.toggle('drawing-mode');
-    document.getElementById('drawing-tooltip').style.display = appState.isDrawing ? 'block' : 'none';
+    const mapEl = document.getElementById('map');
+    const btn = document.getElementById('btn-draw-map');
+    if(appState.isDrawing) {
+        mapEl.classList.add('drawing-mode');
+        document.getElementById('drawing-tooltip').style.display = 'block';
+        btn.classList.replace('btn-secondary', 'btn-primary');
+        btn.innerText = "🛑 Detener";
+    } else {
+        mapEl.classList.remove('drawing-mode');
+        document.getElementById('drawing-tooltip').style.display = 'none';
+        btn.classList.replace('btn-primary', 'btn-secondary');
+        btn.innerText = "✏️ Dibujar";
+    }
 }
+
 function onMapClick(e) { 
     if (!appState.isDrawing) return; 
     const p8908 = proj4("EPSG:4326", "EPSG:8908", [e.latlng.lng, e.latlng.lat]); 
-    const id = document.getElementById('man-id').value || 'ID'+Date.now();
+    const idInput = document.getElementById('man-id');
+    const id = idInput.value || 'ID'+Date.now();
+    
     if (appState.geoType === 'point') { 
         addFeature('points', id, p8908); 
+        document.getElementById('manual-status').innerText = `✔ Punto ${id} agregado`;
+        setTimeout(()=> document.getElementById('manual-status').innerText = '', 2000);
+        idInput.value = 'P' + data.points.length;
     } else { 
         tempGeom.id = id; tempGeom.type = appState.geoType; tempGeom.vertices.push(p8908); 
         document.getElementById('poly-controls').style.display = 'flex';
         drawTempGeom(); 
+        document.getElementById('manual-status').innerText = `Vértices: ${tempGeom.vertices.length}`;
     } 
 }
+
 function manualAction() {
     let x = parseFloat(document.getElementById('man-x').value); 
     let y = parseFloat(document.getElementById('man-y').value); 
     const id = document.getElementById('man-id').value || 'ID1';
     if (isNaN(x) || isNaN(y)) return alert('Coordenadas inválidas');
-    const c = proj4(`EPSG:${document.getElementById('man-epsg').value}`, "EPSG:8908", [x, y]);
+    const c = transformTo8908(x, y, document.getElementById('man-epsg').value);
     if(appState.geoType === 'point') addFeature('points', id, c);
     else { tempGeom.id = id; tempGeom.vertices.push(c); drawTempGeom(); document.getElementById('poly-controls').style.display = 'flex'; }
 }
+
 function drawTempGeom() { 
     layers.temp.clearLayers(); 
     const ll = tempGeom.vertices.map(v => { const p = proj4("EPSG:8908", "EPSG:4326", v); return [p[1], p[0]]; }); 
     ll.forEach(p => L.circleMarker(p, {color:'orange', radius:4}).addTo(layers.temp)); 
     if(ll.length>1) L.polyline(ll, {color:'orange'}).addTo(layers.temp); 
 }
+
 function finishGeometry() { 
-    if (tempGeom.vertices.length < (tempGeom.type==='line'?2:3)) return alert('Faltan vértices');
+    if (tempGeom.vertices.length < (tempGeom.type==='line'?2:3)) return alert('Faltan vértices para esta geometría');
     if (tempGeom.type === 'polygon' && (tempGeom.vertices[0][0] !== tempGeom.vertices[tempGeom.vertices.length-1][0])) {
-        tempGeom.vertices.push(tempGeom.vertices[0]); // Cerrar polígono
+        tempGeom.vertices.push(tempGeom.vertices[0]); // Cerrar polígono automáticamente
     }
     addFeature(tempGeom.type === 'line' ? 'lines' : 'polygons', tempGeom.id, tempGeom.vertices); 
     cancelGeometry(); 
 }
-function cancelGeometry() { tempGeom.vertices = []; layers.temp.clearLayers(); document.getElementById('poly-controls').style.display = 'none'; if(appState.isDrawing) toggleDrawingMode(); }
+function cancelGeometry() { 
+    tempGeom.vertices = []; layers.temp.clearLayers(); 
+    document.getElementById('poly-controls').style.display = 'none'; 
+    document.getElementById('manual-status').innerText = '';
+    if(appState.isDrawing) toggleDrawingMode(); 
+}
 
-// DATA MANAGEMENT
+// ==========================================
+// IMPORTAR ARCHIVOS Y PEGAR (FUNCIÓN RESTAURADA)
+// ==========================================
+function getSampleCoord(g) { 
+    if(g.type === 'Point') return g.coordinates; 
+    if(g.type === 'LineString' || g.type === 'MultiPoint') return g.coordinates[0]; 
+    if(g.type === 'Polygon' || g.type === 'MultiLineString') return g.coordinates[0][0]; 
+    if(g.type === 'MultiPolygon') return g.coordinates[0][0][0]; 
+    return null; 
+}
+
+async function importUniversalFile() { 
+    const file = document.getElementById('file-upload').files[0]; 
+    let srcEpsg = document.getElementById('file-epsg').value; 
+    if (!file) return alert("Por favor selecciona un archivo."); 
+    const status = document.getElementById('import-status'); 
+    status.innerText = "Cargando e interpretando..."; 
+    
+    try { 
+        const buf = await file.arrayBuffer(); 
+        let geojson; 
+        if (file.name.endsWith('.zip')) geojson = await shp(buf); 
+        else if (file.name.endsWith('.kml')) geojson = toGeoJSON.kml(new DOMParser().parseFromString(new TextDecoder().decode(buf), 'text/xml')); 
+        else if (file.name.endsWith('.gpx')) geojson = toGeoJSON.gpx(new DOMParser().parseFromString(new TextDecoder().decode(buf), 'text/xml')); 
+        else geojson = JSON.parse(new TextDecoder().decode(buf)); 
+        
+        if (Array.isArray(geojson)) geojson = { features: geojson.flatMap(g => g.features || [g]) }; 
+        if (!geojson.features) geojson = { features: [geojson] }; 
+        
+        // Autodetectar si las coordenadas parecen WGS84
+        let detected4326 = false; 
+        for(const f of geojson.features) { 
+            if(!f.geometry) continue; 
+            const c = getSampleCoord(f.geometry); 
+            if(c && Math.abs(c[0]) <= 180 && Math.abs(c[1]) <= 90) { 
+                detected4326 = true; break; 
+            } 
+        } 
+        if(detected4326) srcEpsg = '4326'; 
+        
+        let stats = { p: 0, l: 0, poly: 0 }; 
+        geojson.features.forEach(f => { 
+            if (!f.geometry) return; 
+            const id = f.properties?.name || f.properties?.id || f.properties?.ID || `IMP_${Math.floor(Math.random()*1000)}`; 
+            const g = f.geometry; 
+            const type = g.type; 
+            
+            if (type === 'Point') { 
+                addFeature('points', id, transformTo8908(g.coordinates[0], g.coordinates[1], srcEpsg)); 
+                stats.p++; 
+            } else if (type === 'LineString' || type === 'MultiLineString') { 
+                const lines = type === 'LineString' ? [g.coordinates] : g.coordinates; 
+                lines.forEach((l, i) => { 
+                    addFeature('lines', id + (i>0?`_${i+1}`:''), l.map(c => transformTo8908(c[0], c[1], srcEpsg))); 
+                    stats.l++; 
+                }); 
+            } else if (type === 'Polygon' || type === 'MultiPolygon') { 
+                const polys = type === 'Polygon' ? [g.coordinates] : g.coordinates; 
+                polys.forEach((p, i) => { 
+                    addFeature('polygons', id + (i>0?`_${i+1}`:''), p[0].map(c => transformTo8908(c[0], c[1], srcEpsg))); 
+                    stats.poly++; 
+                }); 
+            } 
+        }); 
+        status.innerText = `Cargado con éxito: ${stats.p} Puntos, ${stats.l} Líneas, ${stats.poly} Polígonos.`; 
+        fitMapToAll(); 
+    } catch(e) { 
+        status.innerText = "Error leyendo archivo: " + e.message; 
+        console.error(e); 
+    } 
+}
+
+function processPaste() { 
+    const text = document.getElementById('paste-area').value; 
+    const epsg = document.getElementById('paste-epsg').value; 
+    const type = appState.geoType; 
+    const lines = text.split('\n'); 
+    const groups = {}; 
+    let count = 0; 
+    
+    lines.forEach(line => { 
+        const p = line.split(/[\t,;]+/).map(s => s.trim()); 
+        if (p.length < 3 || isNaN(parseFloat(p[1]))) return; 
+        const id = p[0]; 
+        const c = transformTo8908(parseFloat(p[1]), parseFloat(p[2]), epsg); 
+        if (type === 'point') { 
+            addFeature('points', id, c); 
+            count++; 
+        } else { 
+            if (!groups[id]) groups[id] = []; 
+            groups[id].push(c); 
+        } 
+    }); 
+    
+    if (type !== 'point') { 
+        Object.keys(groups).forEach(id => { 
+            let verts = groups[id]; 
+            if (type === 'polygon' && verts.length >= 3) { 
+                if (verts[0][0] !== verts[verts.length-1][0] || verts[0][1] !== verts[verts.length-1][1]) { 
+                    verts.push(verts[0]); 
+                } 
+            } 
+            if (verts.length >= 2) { 
+                addFeature(type === 'line' ? 'lines' : 'polygons', id, verts); 
+                count++; 
+            } 
+        }); 
+    } 
+    alert(`Se procesaron ${count} elementos correctamente.`); 
+    fitMapToAll(); 
+}
+
+// ==========================================
+// GESTION DE INVENTARIO Y MAPA (RESTAURADO)
+// ==========================================
+function fitMapToAll() { 
+    const bounds = L.latLngBounds(); let valid = false; 
+    [layers.points, layers.lines, layers.polys].forEach(l => { 
+        if(l.getLayers().length){ bounds.extend(l.getBounds()); valid=true; } 
+    }); 
+    if(valid) map.fitBounds(bounds.pad(0.1)); 
+}
+
 function addFeature(type, id, geom) { 
     data[type].push({ id, geom }); drawFeature(type, {id, geom}); 
     localStorage.setItem('giscr_data', JSON.stringify(data)); updateInventory(); 
 }
+
 function drawFeature(type, item) {
     if (type === 'points') { 
         const p = proj4("EPSG:8908", "EPSG:4326", item.geom); 
-        L.circleMarker([p[1], p[0]], {color:'#000', fillColor:'#FFEB3B', fillOpacity:1, radius:6}).bindPopup(item.id).addTo(layers.points); 
+        L.circleMarker([p[1], p[0]], {color:'#000', fillColor:'#FFEB3B', fillOpacity:1, weight:2, radius:6}).bindPopup(`<b>${item.id}</b>`).addTo(layers.points); 
     } else { 
         const ll = item.geom.map(v => { const p = proj4("EPSG:8908", "EPSG:4326", v); return [p[1], p[0]]; });
-        if (type === 'lines') L.polyline(ll, {color:'#FF5722'}).addTo(layers.lines); 
-        else L.polygon(ll, {color:'#00E5FF'}).addTo(layers.polys); 
+        if (type === 'lines') L.polyline(ll, {color:'#FF5722', weight:4}).bindPopup(`<b>${item.id}</b>`).addTo(layers.lines); 
+        else L.polygon(ll, {color:'#00E5FF', weight:3, fillOpacity:0.2}).bindPopup(`<b>${item.id}</b>`).addTo(layers.polys); 
     }
 }
+
 function loadDataFromStorage() { 
     try { 
         const s = JSON.parse(localStorage.getItem('giscr_data')); 
-        if(s) { data = s; ['points','lines','polygons'].forEach(t => data[t].forEach(i => drawFeature(t, i))); updateInventory(); }
+        if(s) { data = s; ['points','lines','polygons'].forEach(t => { if(data[t]) data[t].forEach(i => drawFeature(t, i)); else data[t] = []; }); updateInventory(); }
     } catch(e){} 
 }
+
 function updateInventory() {
     document.getElementById('badge-points').innerText = `${data.points.length} Puntos`;
     document.getElementById('badge-lines').innerText = `${data.lines.length} Líneas`;
     document.getElementById('badge-polys').innerText = `${data.polygons.length} Polígonos`;
+    
+    const renderList = (type, elId) => {
+        const c = document.getElementById(elId);
+        c.innerHTML = data[type].map((item, idx) => `
+            <div class="data-item">
+                <span>${item.id}</span>
+                <div style="display:flex; gap:4px;">
+                    <button class="btn-secondary btn-icon-only" onclick="zoomToFeature('${type}', '${item.id}')">👁</button>
+                    <button class="btn-danger btn-icon-only" onclick="deleteFeature('${type}', ${idx})">🗑</button>
+                </div>
+            </div>
+        `).join('');
+    };
+    renderList('points', 'list-points'); renderList('lines', 'list-lines'); renderList('polygons', 'list-polys');
 }
-function clearAllData() { if(confirm('¿Borrar TODO?')){ data = { points:[], lines:[], polygons:[] }; layers.points.clearLayers(); layers.lines.clearLayers(); layers.polys.clearLayers(); localStorage.setItem('giscr_data', JSON.stringify(data)); updateInventory(); } }
 
-// CONFIG
+function toggleList(t) { 
+    const l = document.getElementById(`list-${t}`); 
+    l.classList.toggle('show'); 
+    listState[t] = l.classList.contains('show'); 
+}
+
+function zoomToFeature(type, id) { 
+    const item = data[type].find(i => i.id === id); 
+    if (!item) return; 
+    if (type === 'points') { 
+        const p = proj4("EPSG:8908", "EPSG:4326", item.geom); map.setView([p[1], p[0]], 18); 
+    } else { 
+        const ll = item.geom.map(v => { const p = proj4("EPSG:8908", "EPSG:4326", v); return [p[1], p[0]]; });
+        map.fitBounds(L.latLngBounds(ll).pad(0.5)); 
+    } 
+}
+
+function deleteFeature(type, index) { 
+    if(!confirm('¿Eliminar elemento?')) return; 
+    data[type].splice(index, 1); 
+    const lType = type === 'polygons' ? 'polys' : type;
+    layers[lType].clearLayers(); 
+    data[type].forEach(item => drawFeature(type, item)); 
+    localStorage.setItem('giscr_data', JSON.stringify(data));
+    updateInventory(); 
+}
+
+function clearAllData() { 
+    if(!confirm('¿Borrar TODO el trabajo actual? Esto no se puede deshacer.')){ return; }
+    data = { points:[], lines:[], polygons:[] }; 
+    layers.points.clearLayers(); layers.lines.clearLayers(); layers.polys.clearLayers(); 
+    localStorage.setItem('giscr_data', JSON.stringify(data)); 
+    updateInventory(); 
+}
+
+// ==========================================
+// CONFIGURACION
+// ==========================================
 function renderConfig() {
     const c = document.getElementById('config-list'); c.innerHTML = '';
     config.forEach((l, i) => {
-        c.innerHTML += `<div style="margin-bottom:8px; padding:8px; border:1px solid #ccc; border-radius:4px;">
-            <input type="checkbox" ${l.enabled?'checked':''} onchange="config[${i}].enabled=this.checked; saveConfig()"> <b>${l.name}</b>
-            <div style="font-size:10px; color:#666; margin-top:4px;">${l.type}</div>
+        c.innerHTML += `<div style="margin-bottom:8px; padding:12px; border:1px solid var(--border); border-radius:4px; background:var(--surface-2);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:bold; margin:0; text-transform:none; font-size:13px;">
+                    <input type="checkbox" ${l.enabled?'checked':''} onchange="config[${i}].enabled=this.checked; saveConfig(); updateMapWmsLayers();"> ${l.name}
+                </label>
+                <button class="btn-secondary btn-icon-only btn-sm" onclick="config.splice(${i},1); saveConfig(); renderConfig(); updateMapWmsLayers();" title="Borrar">🗑</button>
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); margin-top:8px; font-family:var(--font-mono); word-break:break-all;">Type: ${l.type}<br>Attr: ${l.attr}</div>
         </div>`;
     });
 }
 function saveConfig() { localStorage.setItem('giscr_config', JSON.stringify(config)); }
+function resetConfig() { if(confirm('¿Restaurar configuración original?')) { config = JSON.parse(JSON.stringify(DEFAULT_LAYERS)); saveConfig(); renderConfig(); updateMapWmsLayers(); } }
+function addNewLayer() {
+    const name = document.getElementById('new-name').value;
+    const url = document.getElementById('new-url').value;
+    const type = document.getElementById('new-type').value;
+    const attr = document.getElementById('new-attr').value;
+    const srs = document.getElementById('new-srs').value;
+    if(!name || !url || !type || !attr) return alert("Llena todos los campos.");
+    config.push({id:'u_'+Date.now(), name, wfs:url, type, attr, srs, enabled:true});
+    saveConfig(); renderConfig(); updateMapWmsLayers();
+    document.getElementById('new-name').value = ''; document.getElementById('new-type').value = ''; document.getElementById('new-attr').value = '';
+}
 
-// NETWORK & WFS (ROBUST STREAMING PROXY CALL)
+// ==========================================
+// NETWORK & WFS (WORKER PROXY)
+// ==========================================
 async function fetchWithProxyFallback(targetUrl) {
     const proxyUrl = OGC_PROXY_BASE + encodeURIComponent(targetUrl);
     try {
@@ -447,7 +798,7 @@ async function fetchWithProxyFallback(targetUrl) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return await res.json();
     } catch (e) {
-        throw new Error(`Error de red proxy: ${e.message}`);
+        throw new Error(`Fallo de Red: ${e.message}`);
     }
 }
 
@@ -455,14 +806,17 @@ async function fetchPointCoverage(pGeom, c) {
     const pLayer = proj4('EPSG:8908', c.srs, pGeom);
     let tol = (c.srs === 'EPSG:4326') ? 0.00001 : 1;
     const bbox = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
+    
+    // Request optimizado usando el worker de streaming
     const url = `${c.wfs}?service=WFS&version=1.0.0&request=GetFeature&typeName=${c.type}&outputFormat=application/json&bbox=${bbox}&maxFeatures=1`;
     
     try {
         const geojson = await fetchWithProxyFallback(url);
         if (geojson && geojson.features && geojson.features.length > 0) {
             const props = geojson.features[0].properties;
-            const key = Object.keys(props).find(k => k.toLowerCase() === c.attr.toLowerCase());
-            return key && props[key] ? String(props[key]) : 'SIN_DATO';
+            const searchKey = c.attr.toLowerCase();
+            const key = Object.keys(props).find(k => k.toLowerCase() === searchKey);
+            return key && props[key] != null ? String(props[key]) : 'SIN_DATO';
         }
         return 'SIN_DATO';
     } catch (e) {
@@ -470,26 +824,29 @@ async function fetchPointCoverage(pGeom, c) {
     }
 }
 
-// SYNTHESIZED: FULL LINE COVERAGE IMPLEMENTATION
 async function fetchLineCoverages(lineGeom, c, lineId, updateStatus) {
     let results = {};
     for(let i=0; i<lineGeom.length; i++) {
-        await updateStatus(`📍 Analizando Vértice ${i+1} de Línea ${lineId}...`);
+        await updateStatus(`📍 Analizando Vértice ${i+1}/${lineGeom.length} de Línea ${lineId}...`);
         let val = await fetchPointCoverage(lineGeom[i], c);
         results[val] = (results[val] || 0) + 1;
     }
-    // Return the dominant value (majority of vertices)
+    // Determinar la cobertura predominante en los vértices
     let dominant = 'SIN_DATO'; let max = 0;
     for(let v in results) { if(results[v] > max) { max = results[v]; dominant = v; } }
-    return { [dominant]: 1 }; // Return formatted for the original parser
+    return { [dominant]: 1 };
 }
 
+// ==========================================
 // SPATIAL ANALYSIS ENGINE
+// ==========================================
 async function triggerSpatialAnalysis() {
     const c = document.getElementById('report-container');
     const btn = document.getElementById('btn-download-report');
-    if (!data.points.length && !data.lines.length && !data.polygons.length) return c.innerHTML = '<p style="text-align:center;">Sin datos para analizar.</p>';
-    c.innerHTML = '<div class="spinner-container"><div class="loader"></div><p id="analysis-status-text">Procesando...</p></div>';
+    if (!data.points.length && !data.lines.length && !data.polygons.length) {
+        return c.innerHTML = '<p style="text-align:center; padding:30px; color:var(--text-muted);">No hay datos ingresados para analizar.</p>';
+    }
+    c.innerHTML = '<div class="spinner-container"><div class="loader"></div><p id="analysis-status-text" style="font-weight:bold; margin-top:12px; color:var(--primary);">Iniciando motor de muestreo...</p></div>';
     btn.style.display = 'none';
 
     try {
@@ -497,7 +854,7 @@ async function triggerSpatialAnalysis() {
         renderAnalysisUI(globalAnalysisResults);
         btn.style.display = 'block';
     } catch(e) {
-        c.innerHTML = `<p style="color:red; text-align:center;">Error: ${e.message}</p>`;
+        c.innerHTML = `<p style="color:red; text-align:center; padding:20px;">Error crítico en el análisis: ${e.message}</p>`;
     }
 }
 
@@ -506,19 +863,20 @@ async function runSpatialAnalysis() {
     const updateStatus = async (msg) => { statusEl.innerText = msg; await new Promise(r => setTimeout(r, 10)); };
     let res = { points: null, lines: null };
 
-    // POINTS
+    // ANALISIS DE PUNTOS
     if (data.points.length > 0) {
         res.points = { ids: data.points.map(p => p.id), classif: {} };
         for (const c of config) {
             if (!c.enabled) continue;
             res.points.classif[c.name] = {};
             for (const p of data.points) {
-                await updateStatus(`📍 Punto ${p.id} en ${c.name}...`);
+                await updateStatus(`📍 Analizando Punto ${p.id} en capa ${c.name}...`);
                 res.points.classif[c.name][p.id] = await fetchPointCoverage(p.geom, c);
             }
         }
     }
-    // LINES (Using synthesized fetchLineCoverages)
+    
+    // ANALISIS DE LINEAS (Vértices)
     if (data.lines.length > 0) {
         res.lines = { ids: data.lines.map(l => l.id), classif: {} };
         for (const c of config) {
@@ -532,18 +890,21 @@ async function runSpatialAnalysis() {
             }
         }
     }
-    await updateStatus("Generando reporte...");
+    
+    await updateStatus("Generando reporte y ensamblando tablas...");
     return res;
 }
 
-// SYNTHESIZED: FULL RENDER UI IMPLEMENTATION
+// ==========================================
+// RENDERIZADO DE TABLAS Y EXPORTACION
+// ==========================================
 function renderAnalysisUI(results) {
     const container = document.getElementById('report-container');
     let html = '';
     const enabledConfig = config.filter(c => c.enabled);
     
     if(results.points) {
-        html += '<div class="report-section"><h4>📍 Resultados de Puntos</h4><div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th>';
+        html += '<div class="report-section"><h4>📍 Puntos</h4><div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th>';
         enabledConfig.forEach(c => html += `<th>${c.name}</th>`);
         html += '</tr></thead><tbody>';
         results.points.ids.forEach(id => {
@@ -555,7 +916,7 @@ function renderAnalysisUI(results) {
     }
     
     if(results.lines) {
-        html += '<div class="report-section"><h4>📈 Resultados de Líneas (Dominancia)</h4><div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th>';
+        html += '<div class="report-section"><h4>📈 Líneas (Predominancia)</h4><div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th>';
         enabledConfig.forEach(c => html += `<th>${c.name}</th>`);
         html += '</tr></thead><tbody>';
         results.lines.ids.forEach(id => {
@@ -572,7 +933,10 @@ function renderAnalysisUI(results) {
         html += '</tbody></table></div></div>';
     }
     
-    container.innerHTML = html || '<p>Análisis completado sin datos mostrados.</p>';
+    if(!results.points && !results.lines) {
+         html = '<p style="text-align:center; padding:30px;">Análisis completado pero no se detectaron datos válidos.</p>';
+    }
+    container.innerHTML = html;
 }
 
 function downloadReport() {
@@ -588,12 +952,30 @@ function downloadReport() {
             ws_data.push(row);
         });
         ws_data.push([]);
+        ws_data.push([]);
+    }
+    
+    if(globalAnalysisResults.lines) {
+        ws_data.push(["RESULTADOS LINEAS (Predominancia en vértices)"]);
+        let header = ["ID"].concat(enabledConfig.map(c => c.name));
+        ws_data.push(header);
+        globalAnalysisResults.lines.ids.forEach(id => {
+            let row = [id];
+            enabledConfig.forEach(c => {
+                let val = 'SIN_DATO';
+                for(let k in globalAnalysisResults.lines.classif[c.name]) {
+                    if(globalAnalysisResults.lines.classif[c.name][k][id] === 1) val = k;
+                }
+                row.push(val);
+            });
+            ws_data.push(row);
+        });
     }
     
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.aoa_to_sheet(ws_data);
-    XLSX.utils.book_append_sheet(wb, ws, "Reporte GIS");
-    XLSX.writeFile(wb, "Reporte_GIS_Cobertura.xlsx");
+    XLSX.utils.book_append_sheet(wb, ws, "Reporte GIS Cobertura");
+    XLSX.writeFile(wb, "GIS_Cobertura_Resultados.xlsx");
 }
 
 </script>
