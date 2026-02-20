@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gis-cr-cache-v6.6.1-corsfix';
+const CACHE_NAME = 'gis-cr-cache-v6.6.2-final';
 const urlsToCache = [
   './',
   './index.html',
