@@ -789,16 +789,34 @@ function addNewLayer() {
 }
 
 // ==========================================
-// NETWORK & WFS (WORKER PROXY)
+// NETWORK & WFS (WORKER PROXY ACTUALIZADO)
 // ==========================================
 async function fetchWithProxyFallback(targetUrl) {
-    const proxyUrl = OGC_PROXY_BASE + encodeURIComponent(targetUrl);
+    // Usamos EXCLUSIVAMENTE tu Worker de Cloudflare
+    // Los proxies públicos (allorigins/corsproxy) fallan con GeoJSONs grandes de Costa Rica.
+    const workerUrl = `https://ocg-psfor.psforestal.workers.dev/ogc?u=${encodeURIComponent(targetUrl)}`;
+    
     try {
-        const res = await fetch(proxyUrl);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        console.log("🌐 Consultando Worker Proxy:", workerUrl);
+        const res = await fetch(workerUrl, {
+            method: 'GET',
+            headers: {
+                'Accept': 'application/json'
+            }
+        });
+        
+        if (!res.ok) {
+            // Si el Worker responde con un código de error (502, etc), lo leemos
+            const errText = await res.text();
+            console.warn(`⚠️ Error del Worker (HTTP ${res.status}):`, errText);
+            throw new Error(`HTTP ${res.status}: ${errText}`);
+        }
+        
         return await res.json();
     } catch (e) {
-        throw new Error(`Fallo de Red: ${e.message}`);
+        console.error("❌ Fallo crítico en fetchWithProxyFallback:", e);
+        // Devolvemos null para que fetchPointCoverage entienda que falló la red
+        return null; 
     }
 }
 
@@ -807,12 +825,14 @@ async function fetchPointCoverage(pGeom, c) {
     let tol = (c.srs === 'EPSG:4326') ? 0.00001 : 1;
     const bbox = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
     
-    // Request optimizado usando el worker de streaming
     const url = `${c.wfs}?service=WFS&version=1.0.0&request=GetFeature&typeName=${c.type}&outputFormat=application/json&bbox=${bbox}&maxFeatures=1`;
     
     try {
         const geojson = await fetchWithProxyFallback(url);
-        if (geojson && geojson.features && geojson.features.length > 0) {
+        
+        if (!geojson) return 'ERROR_RED'; // Manejo de la caída del proxy
+
+        if (geojson.features && geojson.features.length > 0) {
             const props = geojson.features[0].properties;
             const searchKey = c.attr.toLowerCase();
             const key = Object.keys(props).find(k => k.toLowerCase() === searchKey);
@@ -820,6 +840,7 @@ async function fetchPointCoverage(pGeom, c) {
         }
         return 'SIN_DATO';
     } catch (e) {
+        console.error("Error en fetchPointCoverage:", e);
         return 'ERROR_RED';
     }
 }
