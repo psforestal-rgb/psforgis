@@ -1580,15 +1580,12 @@ async function fetchWithProxyFallback(targetUrl) {
     const [baseWfsUrl, queryString = ''] = String(targetUrl).split('?');
     const plans = [];
 
-    // 1. Nuestro Worker de Cloudflare (si no estamos en file://)
-    if (!ctx.isFileOrigin) {
-        plans.push({
-            label: 'worker-proxy',
-            url: targetUrl,  // fetchOGC construirá la URL con el proxy
-            options: { method: 'GET', responseType: 'json', retries: 2, timeoutMs: 30000 }
-        });
-    }
-
+    // 1. Nuestro Worker de Cloudflare (PRIMERA OPCIÓN, incluso en file://)
+    plans.push({
+        label: 'worker-proxy',
+        url: targetUrl,  // fetchOGC construirá la URL con el proxy
+        options: { method: 'GET', responseType: 'json', retries: 2, timeoutMs: 30000 }
+    });
     // 2. Intento directo (solo si no es file:// y como respaldo)
     if (!ctx.isFileOrigin) {
         plans.push({ label: 'direct-get', url: targetUrl, options: { method: 'GET' } });
