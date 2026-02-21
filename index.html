@@ -131,6 +131,7 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
   <div id="map-container">
     <div id="map">
         <div id="drawing-tooltip">Modo Dibujo Activo</div>
+        <div id="active-layer-name" style="position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--primary); color: white; padding: 6px 16px; border-radius: 20px; font-weight: 600; font-size: 12px; z-index: 2000; display: none; box-shadow: var(--shadow-md);"></div>
         <div id="map-controls-custom">
             <button class="map-btn" onclick="toggleLayersPanel()" title="Capas">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 22 22 12"></polyline></svg>
@@ -442,10 +443,40 @@ function filterLayers(text) {
         el.style.display = el.innerText.toLowerCase().includes(term) ? 'block' : 'none';
     });
 }
+
+function updateActiveLayerLabel(id) {
+    const labelEl = document.getElementById('active-layer-name');
+    if (!labelEl) return;
+    if (id) {
+        const c = config.find(x => x.id === id);
+        if (c) {
+            labelEl.innerText = `Capa Cobertura Visible: ${c.name}`;
+            labelEl.style.display = 'block';
+        } else {
+            labelEl.style.display = 'none';
+        }
+    } else {
+        labelEl.style.display = 'none';
+    }
+}
+
 window.toggleWms = (id, active) => { 
-    const layer = activeWmsLayers[id]; 
-    if (active) map.addLayer(layer); else map.removeLayer(layer); 
+    if (active) {
+        // Excluyente: Apagar las demás capas
+        for (const layerId in activeWmsLayers) {
+            if (layerId !== id && map.hasLayer(activeWmsLayers[layerId])) {
+                map.removeLayer(activeWmsLayers[layerId]);
+            }
+        }
+        map.addLayer(activeWmsLayers[id]);
+        updateActiveLayerLabel(id);
+    } else {
+        map.removeLayer(activeWmsLayers[id]);
+        updateActiveLayerLabel(null);
+    }
+    renderLayersPanel(); // Actualiza la vista de checkboxes
 };
+
 function updateMapWmsLayers() { 
     config.forEach(c => { 
         if (!c.enabled) {
@@ -455,9 +486,19 @@ function updateMapWmsLayers() {
         if (!activeWmsLayers[c.id]) {
             let wmsUrl = c.wfs.endsWith('/wfs') ? c.wfs.substring(0, c.wfs.length - 4) + '/wms' : c.wfs;
             activeWmsLayers[c.id] = L.tileLayer.wms(wmsUrl, { layers: c.type, format: 'image/png', transparent: true, opacity: 0.75 });
-            activeWmsLayers[c.id].addTo(map);
+            // Se elimina la adición automática para que salgan desactivadas por defecto
         }
     }); 
+    
+    // Verificar si hay alguna activa para mantener la etiqueta sincronizada
+    let activeId = null;
+    for (const layerId in activeWmsLayers) {
+        if (map.hasLayer(activeWmsLayers[layerId])) {
+            activeId = layerId;
+            break;
+        }
+    }
+    updateActiveLayerLabel(activeId);
 }
 
 // ==========================================
@@ -534,6 +575,7 @@ function onMapClick(e) {
         document.getElementById('manual-status').innerText = `✔ Punto ${id} agregado`;
         setTimeout(()=> document.getElementById('manual-status').innerText = '', 2000);
         idInput.value = 'P' + data.points.length;
+        fitMapToAll(); // Zoom automático al agregar
     } else { 
         tempGeom.id = id; tempGeom.type = appState.geoType; tempGeom.vertices.push(p8908); 
         document.getElementById('poly-controls').style.display = 'flex';
@@ -548,8 +590,12 @@ function manualAction() {
     const id = document.getElementById('man-id').value || 'ID1';
     if (isNaN(x) || isNaN(y)) return alert('Coordenadas inválidas');
     const c = transformTo8908(x, y, document.getElementById('man-epsg').value);
-    if(appState.geoType === 'point') addFeature('points', id, c);
-    else { tempGeom.id = id; tempGeom.vertices.push(c); drawTempGeom(); document.getElementById('poly-controls').style.display = 'flex'; }
+    if(appState.geoType === 'point') {
+        addFeature('points', id, c);
+        fitMapToAll(); // Zoom automático al agregar
+    } else { 
+        tempGeom.id = id; tempGeom.vertices.push(c); drawTempGeom(); document.getElementById('poly-controls').style.display = 'flex'; 
+    }
 }
 
 function drawTempGeom() { 
@@ -566,6 +612,7 @@ function finishGeometry() {
     }
     addFeature(tempGeom.type === 'line' ? 'lines' : 'polygons', tempGeom.id, tempGeom.vertices); 
     cancelGeometry(); 
+    fitMapToAll(); // Zoom automático al terminar figura
 }
 function cancelGeometry() { 
     tempGeom.vertices = []; layers.temp.clearLayers(); 
@@ -725,7 +772,15 @@ function drawFeature(type, item) {
 function loadDataFromStorage() { 
     try { 
         const s = JSON.parse(localStorage.getItem('giscr_data')); 
-        if(s) { data = s; ['points','lines','polygons'].forEach(t => { if(data[t]) data[t].forEach(i => drawFeature(t, i)); else data[t] = []; }); updateInventory(); }
+        if(s) { 
+            data = s; 
+            ['points','lines','polygons'].forEach(t => { 
+                if(data[t]) data[t].forEach(i => drawFeature(t, i)); 
+                else data[t] = []; 
+            }); 
+            updateInventory(); 
+            setTimeout(fitMapToAll, 500); // Zoom tras cargar datos cacheados
+        }
     } catch(e){} 
 }
 
