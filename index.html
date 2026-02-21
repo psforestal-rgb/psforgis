@@ -133,7 +133,7 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
         <div id="drawing-tooltip">Modo Dibujo Activo</div>
         <div id="map-controls-custom">
             <button class="map-btn" onclick="toggleLayersPanel()" title="Capas">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 17 22 12"></polyline></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"></polygon><polyline points="2 17 12 22 22 17"></polyline><polyline points="2 12 12 22 22 12"></polyline></svg>
             </button>
         </div>
         <div id="layers-panel" class="hidden">
@@ -305,6 +305,9 @@ let appState = { inputMethod: 'manual', geoType: 'point', isDrawing: false };
 let wizardState = { step: 1, method: null, geoType: null };
 let listState = { points: false, lines: false, polys: false };
 let globalAnalysisResults = null;
+const pointCoverageCache = new Map();
+const MAX_LINE_SAMPLE_POINTS = 25;
+const ANALYSIS_CONCURRENCY = 6;
 
 const DEFAULT_LAYERS = [
   { id: 'fona2000', name: 'FONAFIFO 2000', wfs: 'https://www.sirefor.go.cr/GeoserviciosSIREFOR/wfs', type: 'cobertura_forestal2000', attr: 'USO_COBERT', srs: 'EPSG:4326', enabled: true },
@@ -506,11 +509,13 @@ function toggleDrawingMode() {
     const mapEl = document.getElementById('map');
     const btn = document.getElementById('btn-draw-map');
     if(appState.isDrawing) {
+        map.doubleClickZoom.disable();   // <-- agregado
         mapEl.classList.add('drawing-mode');
         document.getElementById('drawing-tooltip').style.display = 'block';
         btn.classList.replace('btn-secondary', 'btn-primary');
         btn.innerText = "🛑 Detener";
     } else {
+        map.doubleClickZoom.enable();    // <-- agregado
         mapEl.classList.remove('drawing-mode');
         document.getElementById('drawing-tooltip').style.display = 'none';
         btn.classList.replace('btn-primary', 'btn-secondary');
@@ -570,7 +575,7 @@ function cancelGeometry() {
 }
 
 // ==========================================
-// IMPORTAR ARCHIVOS Y PEGAR (FUNCIÓN RESTAURADA)
+// IMPORTAR ARCHIVOS Y PEGAR (FUNCIÓN RESTAURADA CON OPTIMIZACIONES)
 // ==========================================
 function getSampleCoord(g) { 
     if(g.type === 'Point') return g.coordinates; 
@@ -617,22 +622,23 @@ async function importUniversalFile() {
             const type = g.type; 
             
             if (type === 'Point') { 
-                addFeature('points', id, transformTo8908(g.coordinates[0], g.coordinates[1], srcEpsg)); 
+                addFeature('points', id, transformTo8908(g.coordinates[0], g.coordinates[1], srcEpsg), { skipSync: true }); 
                 stats.p++; 
             } else if (type === 'LineString' || type === 'MultiLineString') { 
                 const lines = type === 'LineString' ? [g.coordinates] : g.coordinates; 
                 lines.forEach((l, i) => { 
-                    addFeature('lines', id + (i>0?`_${i+1}`:''), l.map(c => transformTo8908(c[0], c[1], srcEpsg))); 
+                    addFeature('lines', id + (i>0?`_${i+1}`:''), l.map(c => transformTo8908(c[0], c[1], srcEpsg)), { skipSync: true }); 
                     stats.l++; 
                 }); 
             } else if (type === 'Polygon' || type === 'MultiPolygon') { 
                 const polys = type === 'Polygon' ? [g.coordinates] : g.coordinates; 
                 polys.forEach((p, i) => { 
-                    addFeature('polygons', id + (i>0?`_${i+1}`:''), p[0].map(c => transformTo8908(c[0], c[1], srcEpsg))); 
+                    addFeature('polygons', id + (i>0?`_${i+1}`:''), p[0].map(c => transformTo8908(c[0], c[1], srcEpsg)), { skipSync: true }); 
                     stats.poly++; 
                 }); 
             } 
         }); 
+        persistDataAndInventory();   // <-- agregado
         status.innerText = `Cargado con éxito: ${stats.p} Puntos, ${stats.l} Líneas, ${stats.poly} Polígonos.`; 
         fitMapToAll(); 
     } catch(e) { 
@@ -655,7 +661,7 @@ function processPaste() {
         const id = p[0]; 
         const c = transformTo8908(parseFloat(p[1]), parseFloat(p[2]), epsg); 
         if (type === 'point') { 
-            addFeature('points', id, c); 
+            addFeature('points', id, c, { skipSync: true }); 
             count++; 
         } else { 
             if (!groups[id]) groups[id] = []; 
@@ -672,11 +678,12 @@ function processPaste() {
                 } 
             } 
             if (verts.length >= 2) { 
-                addFeature(type === 'line' ? 'lines' : 'polygons', id, verts); 
+                addFeature(type === 'line' ? 'lines' : 'polygons', id, verts, { skipSync: true }); 
                 count++; 
             } 
         }); 
     } 
+    persistDataAndInventory();   // <-- agregado
     alert(`Se procesaron ${count} elementos correctamente.`); 
     fitMapToAll(); 
 }
@@ -692,9 +699,16 @@ function fitMapToAll() {
     if(valid) map.fitBounds(bounds.pad(0.1)); 
 }
 
-function addFeature(type, id, geom) { 
+// Nueva función para persistencia diferida
+function persistDataAndInventory() {
+    localStorage.setItem('giscr_data', JSON.stringify(data));
+    updateInventory();
+}
+
+// addFeature modificada con opción skipSync
+function addFeature(type, id, geom, options = {}) { 
     data[type].push({ id, geom }); drawFeature(type, {id, geom}); 
-    localStorage.setItem('giscr_data', JSON.stringify(data)); updateInventory(); 
+    if (!options.skipSync) persistDataAndInventory(); 
 }
 
 function drawFeature(type, item) {
@@ -806,34 +820,41 @@ function addNewLayer() {
 // ==========================================
 async function fetchWithProxyFallback(targetUrl) {
     // Usamos EXCLUSIVAMENTE tu Worker de Cloudflare
-    // Los proxies públicos (allorigins/corsproxy) fallan con GeoJSONs grandes de Costa Rica.
     const workerUrl = `https://ocg-psfor.psforestal.workers.dev/ogc?u=${encodeURIComponent(targetUrl)}`;
     
     try {
-        console.log("🌐 Consultando Worker Proxy:", workerUrl);
-        const res = await fetch(workerUrl, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json'
+        const ctrl = new AbortController();
+        const timeoutId = setTimeout(() => ctrl.abort(), 12000);
+        try {
+            console.log("🌐 Consultando Worker Proxy:", workerUrl);
+            const res = await fetch(workerUrl, {
+                method: 'GET',
+                signal: ctrl.signal,
+                headers: {
+                    'Accept': 'application/json'
+                }
+            });
+
+            if (!res.ok) {
+                const errText = await res.text();
+                console.warn(`⚠️ Error del Worker (HTTP ${res.status}):`, errText);
+                throw new Error(`HTTP ${res.status}: ${errText}`);
             }
-        });
-        
-        if (!res.ok) {
-            // Si el Worker responde con un código de error (502, etc), lo leemos
-            const errText = await res.text();
-            console.warn(`⚠️ Error del Worker (HTTP ${res.status}):`, errText);
-            throw new Error(`HTTP ${res.status}: ${errText}`);
+
+            return await res.json();
+        } finally {
+            clearTimeout(timeoutId);
         }
-        
-        return await res.json();
     } catch (e) {
         console.error("❌ Fallo crítico en fetchWithProxyFallback:", e);
-        // Devolvemos null para que fetchPointCoverage entienda que falló la red
         return null; 
     }
 }
 
 async function fetchPointCoverage(pGeom, c) {
+    const cacheKey = `${c.id}|${Math.round(pGeom[0] * 10) / 10}|${Math.round(pGeom[1] * 10) / 10}`;
+    if (pointCoverageCache.has(cacheKey)) return pointCoverageCache.get(cacheKey);
+
     const pLayer = proj4('EPSG:8908', c.srs, pGeom);
     let tol = (c.srs === 'EPSG:4326') ? 0.00001 : 1;
     const bbox = `${pLayer[0]-tol},${pLayer[1]-tol},${pLayer[0]+tol},${pLayer[1]+tol},${c.srs}`;
@@ -843,32 +864,57 @@ async function fetchPointCoverage(pGeom, c) {
     try {
         const geojson = await fetchWithProxyFallback(url);
         
-        if (!geojson) return 'ERROR_RED'; // Manejo de la caída del proxy
+        if (!geojson) {
+            pointCoverageCache.set(cacheKey, 'ERROR_RED');
+            return 'ERROR_RED';
+        }
 
         if (geojson.features && geojson.features.length > 0) {
             const props = geojson.features[0].properties;
             const searchKey = c.attr.toLowerCase();
             const key = Object.keys(props).find(k => k.toLowerCase() === searchKey);
-            return key && props[key] != null ? String(props[key]) : 'SIN_DATO';
+            const val = key && props[key] != null ? String(props[key]) : 'SIN_DATO';
+            pointCoverageCache.set(cacheKey, val);
+            return val;
         }
+        pointCoverageCache.set(cacheKey, 'SIN_DATO');
         return 'SIN_DATO';
     } catch (e) {
         console.error("Error en fetchPointCoverage:", e);
+        pointCoverageCache.set(cacheKey, 'ERROR_RED');
         return 'ERROR_RED';
     }
 }
 
 async function fetchLineCoverages(lineGeom, c, lineId, updateStatus) {
+    const sampleIdx = sampleLineVertexIndexes(lineGeom.length, MAX_LINE_SAMPLE_POINTS);
     let results = {};
-    for(let i=0; i<lineGeom.length; i++) {
-        await updateStatus(`📍 Analizando Vértice ${i+1}/${lineGeom.length} de Línea ${lineId}...`);
-        let val = await fetchPointCoverage(lineGeom[i], c);
+    for(let i=0; i<sampleIdx.length; i++) {
+        const idx = sampleIdx[i];
+        await updateStatus(`📍 Analizando vértice ${i+1}/${sampleIdx.length} de Línea ${lineId}...`);
+        let val = await fetchPointCoverage(lineGeom[idx], c);
         results[val] = (results[val] || 0) + 1;
     }
     // Determinar la cobertura predominante en los vértices
     let dominant = 'SIN_DATO'; let max = 0;
     for(let v in results) { if(results[v] > max) { max = results[v]; dominant = v; } }
     return { [dominant]: 1 };
+}
+
+function sampleLineVertexIndexes(totalVertices, maxSamples = MAX_LINE_SAMPLE_POINTS) {
+    if (totalVertices <= maxSamples) return Array.from({ length: totalVertices }, (_, i) => i);
+    const step = (totalVertices - 1) / (maxSamples - 1);
+    const idxSet = new Set();
+    for (let i = 0; i < maxSamples; i++) idxSet.add(Math.round(i * step));
+    return [...idxSet].sort((a, b) => a - b);
+}
+
+async function mapWithConcurrency(items, limit, fn) {
+    const queue = [...items];
+    const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+        while (queue.length) await fn(queue.shift());
+    });
+    await Promise.all(workers);
 }
 
 // ==========================================
@@ -896,6 +942,7 @@ async function runSpatialAnalysis() {
     const statusEl = document.getElementById('analysis-status-text');
     const updateStatus = async (msg) => { statusEl.innerText = msg; await new Promise(r => setTimeout(r, 10)); };
     let res = { points: null, lines: null };
+    pointCoverageCache.clear();   // <-- agregado
 
     // ANALISIS DE PUNTOS
     if (data.points.length > 0) {
@@ -903,10 +950,10 @@ async function runSpatialAnalysis() {
         for (const c of config) {
             if (!c.enabled) continue;
             res.points.classif[c.name] = {};
-            for (const p of data.points) {
+            await mapWithConcurrency(data.points, ANALYSIS_CONCURRENCY, async (p) => {
                 await updateStatus(`📍 Analizando Punto ${p.id} en capa ${c.name}...`);
                 res.points.classif[c.name][p.id] = await fetchPointCoverage(p.geom, c);
-            }
+            });
         }
     }
     
@@ -916,12 +963,12 @@ async function runSpatialAnalysis() {
         for (const c of config) {
             if (!c.enabled) continue;
             res.lines.classif[c.name] = {};
-            for (const l of data.lines) {
+            await mapWithConcurrency(data.lines, ANALYSIS_CONCURRENCY, async (l) => {
                 const covs = await fetchLineCoverages(l.geom, c, l.id, updateStatus);
                 const dominant = Object.keys(covs)[0] || 'SIN_DATO';
                 if (!res.lines.classif[c.name][dominant]) res.lines.classif[c.name][dominant] = {};
                 res.lines.classif[c.name][dominant][l.id] = 1;
-            }
+            });
         }
     }
     
