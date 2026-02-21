@@ -458,6 +458,10 @@ function switchMainTab(t) {
     document.getElementById(`panel-${t}`).classList.add('active'); 
     if(t === 'results') triggerSpatialAnalysis(); 
 }
+  // Función para el botón "Analizar Todo"
+function switchToResults() {
+    switchMainTab('results');
+}
 function renderWizard() {
     document.querySelectorAll('.wizard-step-content').forEach(e => e.style.display = 'none');
     document.getElementById(`wizard-step-${wizardState.step}`).style.display = 'block';
