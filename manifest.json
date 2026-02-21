@@ -1,14 +1,14 @@
 {
-  "name": "GIS Cobertura CR v6.5",
-  "short_name": "GIS CR",
-  "description": "Sistema de Análisis Espacial de Cobertura Forestal",
+  "name": "COBERTURA CR v7.0",
+  "short_name": "Cobertura CR",
+  "description": "Motor de Análisis Espacial de Cobertura Forestal",
   "start_url": "./index.html",
   "display": "standalone",
-  "background_color": "#eceff1",
-  "theme_color": "#2e7d32",
+  "background_color": "#FFF3E0",
+  "theme_color": "#C62828",
   "icons": [
     {
-      "src": "[https://www.sirefor.go.cr/images/favicon.ico](https://www.sirefor.go.cr/images/favicon.ico)",
+      "src": "https://www.sirefor.go.cr/images/favicon.ico",
       "sizes": "192x192",
       "type": "image/x-icon"
     }
