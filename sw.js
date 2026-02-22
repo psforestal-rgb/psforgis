@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gis-cr-cache-v6.6.3-final';
+const CACHE_NAME = 'gis-cr-cache-v7.0.1';
 const urlsToCache = [
   './',
   './index.html',
@@ -17,7 +17,7 @@ const urlsToCache = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
-      console.log('Instalando caché de PWA...');
+      console.log('Instalando caché PWA v7.0.1...');
       for (const url of urlsToCache) {
         try {
           await cache.add(url);
@@ -33,22 +33,46 @@ self.addEventListener('install', event => {
 self.addEventListener('fetch', event => {
   const urlString = event.request.url.toLowerCase();
   
-  // EXCLUSIÓN ESTRICTA DE CACHÉ PARA APIS Y WORKERS
+  // EXCLUSIÓN TOTAL: APIs, Workers, geo-servicios → Network Only
   if (
     event.request.method !== 'GET' || 
     urlString.includes('wfs') || 
     urlString.includes('wms') ||
     urlString.includes('workers.dev') ||
     urlString.includes('sirefor') ||
+    urlString.includes('snitcr') ||
     urlString.includes('allorigins') ||
-    urlString.includes('corsproxy')
+    urlString.includes('corsproxy') ||
+    urlString.includes('arcgisonline')
   ) {
-    return; // Pasa la petición a la red (Network Only)
+    return; // Network Only
   }
   
+  // Para archivos CDN (librerías): Cache-First
+  if (urlString.includes('cdnjs.cloudflare.com') || urlString.includes('googleapis.com') || urlString.includes('fonts.gstatic.com')) {
+    event.respondWith(
+      caches.match(event.request).then(response => {
+        return response || fetch(event.request).then(netResponse => {
+          return caches.open(CACHE_NAME).then(cache => {
+            cache.put(event.request, netResponse.clone());
+            return netResponse;
+          });
+        });
+      })
+    );
+    return;
+  }
+  
+  // Para archivos propios (index.html, sw.js, manifest.json): Network-First
+  // Así siempre carga la versión más reciente si hay conexión
   event.respondWith(
-    caches.match(event.request).then(response => {
-      return response || fetch(event.request);
+    fetch(event.request).then(netResponse => {
+      return caches.open(CACHE_NAME).then(cache => {
+        cache.put(event.request, netResponse.clone());
+        return netResponse;
+      });
+    }).catch(() => {
+      return caches.match(event.request);
     })
   );
 });
