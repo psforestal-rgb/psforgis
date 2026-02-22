@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>COBERTURA CR v7.0 – Motor de Análisis Espacial</title>
+<title>COBERTURA CR v7.1 – Motor de Análisis Espacial</title>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2e7d32">
@@ -219,7 +219,7 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
           <div class="brand-sub brand-sub-mono">✉ pablo.sanchez@sinac.go.cr · 📞 (506) 6126-7123</div>
         </div>
       </div>
-      <div class="brand-actions"><span class="badge">v7.0</span> <button class="btn-secondary btn-icon-only" onclick="toggleTheme()" title="Cambiar Tema">◑</button></div>
+      <div class="brand-actions"><span class="badge">v7.1</span> <button class="btn-secondary btn-icon-only" onclick="toggleTheme()" title="Cambiar Tema">◑</button></div>
     </div>
     <div id="topbar">
       <div class="tab active" data-tab="data" onclick="switchMainTab('data')">📁 Datos</div>
@@ -1175,21 +1175,209 @@ async function fetchPointCoverage(pGeom, c) {
     }
 }
 
-async function fetchLineCoverages(lineGeom, c, lineId, updateStatus) {
-    const sampleIdx = sampleLineVertexIndexes(lineGeom.length, MAX_LINE_SAMPLE_POINTS);
-    let results = {};
-    for(let i=0; i<sampleIdx.length; i++) {
-        const idx = sampleIdx[i];
-        await updateStatus(`📍 Analizando vértice ${i+1}/${sampleIdx.length} de Línea ${lineId}...`);
-        let val = await fetchPointCoverage(lineGeom[idx], c);
-        results[val] = (results[val] || 0) + 1;
+// ==========================================
+// MOTOR DE INTERSECCIÓN GEOMÉTRICA (JSTS)
+// Geoproceso real: descarga WFS → intersección topológica → áreas/longitudes exactas
+// ==========================================
+
+// Reproyecta coordenadas de un GeoJSON geometry entre SRS
+function reprojectGeoJSONGeom(geom, fromSrs, toSrs) {
+    if (fromSrs === toSrs) return geom;
+    const conv = c => proj4(fromSrs, toSrs, [c[0], c[1]]);
+    const convRing = ring => ring.map(conv);
+    const result = { type: geom.type };
+    switch (geom.type) {
+        case 'Polygon':      result.coordinates = geom.coordinates.map(convRing); break;
+        case 'MultiPolygon': result.coordinates = geom.coordinates.map(p => p.map(convRing)); break;
+        case 'LineString':   result.coordinates = convRing(geom.coordinates); break;
+        case 'MultiLineString': result.coordinates = geom.coordinates.map(convRing); break;
+        case 'Point':        result.coordinates = conv(geom.coordinates); break;
+        default: return geom;
     }
-    // Determinar la cobertura predominante en los vértices
-    let dominant = 'SIN_DATO'; let max = 0;
-    for(let v in results) { if(results[v] > max) { max = results[v]; dominant = v; } }
-    return { [dominant]: 1 };
+    return result;
 }
 
+// Convierte GeoJSON geometry a JSTS geometry (con validación y reparación)
+function geojsonToJSTS(geojsonGeom) {
+    try {
+        const reader = new jsts.io.GeoJSONReader();
+        let geom = reader.read(geojsonGeom);
+        if (!geom || geom.isEmpty()) return null;
+        if (!geom.isValid()) {
+            geom = geom.buffer(0); // Reparar geometría inválida
+            if (!geom || geom.isEmpty()) return null;
+        }
+        return geom;
+    } catch (e) {
+        console.warn('JSTS read error:', e.message);
+        return null;
+    }
+}
+
+// Convierte JSTS geometry a GeoJSON (para exportar intersecciones)
+function jstsToGeoJSON(jstsGeom) {
+    try {
+        const writer = new jsts.io.GeoJSONWriter();
+        return writer.write(jstsGeom);
+    } catch(e) { return null; }
+}
+
+// Construye JSTS Polygon desde coordenadas usuario [[x,y], ...] en CRTM05
+function userPolygonToJSTS(coords) {
+    const closed = coords.map(c => [c[0], c[1]]);
+    if (closed.length > 2) {
+        const f = closed[0], l = closed[closed.length - 1];
+        if (f[0] !== l[0] || f[1] !== l[1]) closed.push([f[0], f[1]]);
+    }
+    return geojsonToJSTS({ type: 'Polygon', coordinates: [closed] });
+}
+
+// Construye JSTS LineString desde coordenadas usuario
+function userLineToJSTS(coords) {
+    if (coords.length < 2) return null;
+    return geojsonToJSTS({ type: 'LineString', coordinates: coords });
+}
+
+// Calcula longitud de un array de coords [[x,y],...]  (CRTM05 → metros)
+function calcLineLength(coords) {
+    let len = 0;
+    for (let i = 1; i < coords.length; i++) {
+        const dx = coords[i][0] - coords[i - 1][0];
+        const dy = coords[i][1] - coords[i - 1][1];
+        len += Math.sqrt(dx * dx + dy * dy);
+    }
+    return len;
+}
+
+// Descarga features WFS (GeoJSON) dentro de un bounding box en CRTM05
+// Retorna array de { covType, jstsGeom } ya en CRTM05
+async function fetchWFSFeaturesInBBox(layerConfig, bboxCRTM05, timeoutMs) {
+    timeoutMs = timeoutMs || 30000;
+    const [bMinX, bMinY, bMaxX, bMaxY] = bboxCRTM05;
+    let queryBbox, querySrs;
+
+    if (layerConfig.srs === 'EPSG:4326') {
+        const sw = proj4('EPSG:8908', 'EPSG:4326', [bMinX, bMinY]);
+        const ne = proj4('EPSG:8908', 'EPSG:4326', [bMaxX, bMaxY]);
+        queryBbox = `${sw[0]},${sw[1]},${ne[0]},${ne[1]}`;
+        querySrs = 'EPSG:4326';
+    } else {
+        queryBbox = `${bMinX},${bMinY},${bMaxX},${bMaxY}`;
+        querySrs = layerConfig.srs;
+    }
+
+    const url = `${layerConfig.wfs}?service=WFS&version=1.0.0&request=GetFeature` +
+        `&typeName=${layerConfig.type}&outputFormat=application/json` +
+        `&bbox=${queryBbox},${querySrs}&maxFeatures=2000`;
+
+    const workerUrl = `${OGC_PROXY_BASE}${encodeURIComponent(url)}`;
+
+    try {
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+        const res = await fetch(workerUrl, { signal: ctrl.signal, headers: { 'Accept': 'application/json' } });
+        clearTimeout(tid);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const geojson = await res.json();
+        if (!geojson || !geojson.features) return [];
+
+        const results = [];
+        for (const f of geojson.features) {
+            try {
+                if (!f.geometry || !f.geometry.coordinates) continue;
+                const attrKey = Object.keys(f.properties || {}).find(k => k.toLowerCase() === layerConfig.attr.toLowerCase());
+                const covType = (attrKey && f.properties[attrKey] != null) ? String(f.properties[attrKey]) : 'SIN_DATO';
+
+                // Reproyectar a CRTM05 si viene en 4326
+                const geomCRTM = (layerConfig.srs === 'EPSG:8908')
+                    ? f.geometry
+                    : reprojectGeoJSONGeom(f.geometry, layerConfig.srs, 'EPSG:8908');
+
+                const jstsGeom = geojsonToJSTS(geomCRTM);
+                if (jstsGeom) results.push({ covType, jstsGeom });
+            } catch(e) { /* feature inválido, se omite */ }
+        }
+        console.info(`✔ WFS ${layerConfig.name}: ${results.length} features válidos de ${geojson.features.length} total`);
+        return results;
+    } catch (e) {
+        console.warn(`❌ WFS fetch failed ${layerConfig.name}:`, e.message);
+        return [];
+    }
+}
+
+// ==========================================
+// GEOPROCESO: INTERSECCIÓN TOPOLÓGICA REAL
+// Entrada: geometría JSTS del usuario + config de capa WFS
+// Salida: { covType: areaHa_o_longitudM, ..., _total, _method, _intersections[] }
+// Para polígonos: área en hectáreas (6 decimales = dm²)
+// Para líneas: longitud en metros (2 decimales = cm)
+// ==========================================
+async function geoprocessIntersection(userJSTSGeom, layerConfig, geomType, featureId, updateStatus) {
+    const env = userJSTSGeom.getEnvelopeInternal();
+    // Expandir bbox ligeramente para capturar features en el borde
+    const pad = Math.max(env.getWidth(), env.getHeight()) * 0.05 + 10;
+    const bboxCRTM05 = [
+        env.getMinX() - pad, env.getMinY() - pad,
+        env.getMaxX() + pad, env.getMaxY() + pad
+    ];
+
+    await updateStatus(`⬇ Descargando geometrías WFS de ${layerConfig.name} para ${featureId}...`);
+    const wfsFeatures = await fetchWFSFeaturesInBBox(layerConfig, bboxCRTM05);
+
+    if (!wfsFeatures || wfsFeatures.length === 0) {
+        return { _total: 0, _method: 'intersection', _noData: true };
+    }
+
+    await updateStatus(`🔬 Intersectando ${featureId} con ${wfsFeatures.length} polígonos de ${layerConfig.name}...`);
+
+    const result = { _total: 0, _method: 'intersection' };
+    const intersections = []; // Geometrías de intersección para GeoJSON export
+
+    for (let i = 0; i < wfsFeatures.length; i++) {
+        try {
+            const wf = wfsFeatures[i];
+            // Filtro rápido: test de envolvente antes de intersección completa
+            if (!userJSTSGeom.getEnvelopeInternal().intersects(wf.jstsGeom.getEnvelopeInternal())) continue;
+            if (!userJSTSGeom.intersects(wf.jstsGeom)) continue;
+
+            const intersection = userJSTSGeom.intersection(wf.jstsGeom);
+            if (!intersection || intersection.isEmpty()) continue;
+
+            let measure;
+            if (geomType === 'polygon') {
+                measure = intersection.getArea() / 10000; // m² → hectáreas
+            } else { // line
+                measure = intersection.getLength(); // metros directos (CRTM05 es métrico)
+            }
+
+            if (measure <= 0) continue;
+
+            result[wf.covType] = (result[wf.covType] || 0) + measure;
+            result._total += measure;
+
+            // Guardar geometría de intersección para exportar en reporte
+            const intGeoJSON = jstsToGeoJSON(intersection);
+            if (intGeoJSON) {
+                // Convertir coords de CRTM05 a WGS84 para GeoJSON estándar
+                const intWGS = reprojectGeoJSONGeom(intGeoJSON, 'EPSG:8908', 'EPSG:4326');
+                intersections.push({
+                    covType: wf.covType,
+                    measure: measure,
+                    geojson: intWGS
+                });
+            }
+        } catch(e) {
+            console.warn(`Intersection error feature ${i} in ${featureId}:`, e.message);
+        }
+    }
+
+    result._intersections = intersections;
+    return result;
+}
+
+// ==========================================
+// FALLBACK: Muestreo de vértices (se usa si intersección WFS falla)
+// ==========================================
 function sampleLineVertexIndexes(totalVertices, maxSamples = MAX_LINE_SAMPLE_POINTS) {
     if (totalVertices <= maxSamples) return Array.from({ length: totalVertices }, (_, i) => i);
     const step = (totalVertices - 1) / (maxSamples - 1);
@@ -1198,13 +1386,24 @@ function sampleLineVertexIndexes(totalVertices, maxSamples = MAX_LINE_SAMPLE_POI
     return [...idxSet].sort((a, b) => a - b);
 }
 
-// Genera puntos de muestreo dentro de un polígono usando grilla regular + vértices
-function generatePolygonSampleGrid(geom, maxSamples) {
-    // Bounding box del polígono
+async function fallbackLineSampling(lineGeom, c, lineId, lineLength, updateStatus) {
+    const sampleIdx = sampleLineVertexIndexes(lineGeom.length, MAX_LINE_SAMPLE_POINTS);
+    const counts = {};
+    for (let i = 0; i < sampleIdx.length; i++) {
+        await updateStatus(`⚠ Fallback muestreo vértice ${i+1}/${sampleIdx.length} de ${lineId}...`);
+        const val = await fetchPointCoverage(lineGeom[sampleIdx[i]], c);
+        counts[val] = (counts[val] || 0) + 1;
+    }
+    const totalSamples = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    const result = { _total: lineLength, _method: 'sampling' };
+    for (const k in counts) { result[k] = lineLength * (counts[k] / totalSamples); }
+    return result;
+}
+
+async function fallbackPolygonSampling(pol, c, updateStatus) {
+    const geom = pol.geom;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     geom.forEach(v => { minX = Math.min(minX, v[0]); minY = Math.min(minY, v[1]); maxX = Math.max(maxX, v[0]); maxY = Math.max(maxY, v[1]); });
-
-    // Point-in-polygon test (ray casting)
     function pointInPolygon(x, y, poly) {
         let inside = false;
         for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
@@ -1213,34 +1412,39 @@ function generatePolygonSampleGrid(geom, maxSamples) {
         }
         return inside;
     }
-
     const samples = [];
-    // Agregar algunos vértices (muestra del borde)
     const vertIdx = sampleLineVertexIndexes(geom.length, Math.min(5, geom.length));
     vertIdx.forEach(i => samples.push(geom[i]));
-
-    // Calcular tamaño de celda para grilla interior
-    const dx = maxX - minX;
-    const dy = maxY - minY;
-    const gridTarget = maxSamples - samples.length;
-    if (gridTarget <= 0) return samples.slice(0, maxSamples);
-    
-    const cellsPerSide = Math.max(2, Math.ceil(Math.sqrt(gridTarget * 1.5)));
-    const stepX = dx / cellsPerSide;
-    const stepY = dy / cellsPerSide;
-
-    for (let ix = 0; ix < cellsPerSide; ix++) {
-        for (let iy = 0; iy < cellsPerSide; iy++) {
-            const px = minX + stepX * (ix + 0.5);
-            const py = minY + stepY * (iy + 0.5);
-            if (pointInPolygon(px, py, geom)) {
-                samples.push([px, py]);
+    const dx = maxX - minX, dy = maxY - minY;
+    const gridTarget = MAX_LINE_SAMPLE_POINTS - samples.length;
+    if (gridTarget > 0) {
+        const cellsPerSide = Math.max(2, Math.ceil(Math.sqrt(gridTarget * 1.5)));
+        const stepX = dx / cellsPerSide, stepY = dy / cellsPerSide;
+        for (let ix = 0; ix < cellsPerSide && samples.length < MAX_LINE_SAMPLE_POINTS; ix++) {
+            for (let iy = 0; iy < cellsPerSide && samples.length < MAX_LINE_SAMPLE_POINTS; iy++) {
+                const px = minX + stepX * (ix + 0.5), py = minY + stepY * (iy + 0.5);
+                if (pointInPolygon(px, py, geom)) samples.push([px, py]);
             }
-            if (samples.length >= maxSamples) break;
         }
-        if (samples.length >= maxSamples) break;
     }
-    return samples.slice(0, maxSamples);
+    // Área del polígono en ha (Shoelace)
+    let area = 0;
+    for (let i = 0; i < geom.length; i++) {
+        const j = (i + 1) % geom.length;
+        area += geom[i][0] * geom[j][1]; area -= geom[j][0] * geom[i][1];
+    }
+    const areaHa = Math.abs(area) / 2 / 10000;
+
+    const counts = {};
+    for (let i = 0; i < samples.length; i++) {
+        await updateStatus(`⚠ Fallback muestreo ${i+1}/${samples.length} de Polígono ${pol.id} en ${c.name}...`);
+        const val = await fetchPointCoverage(samples[i], c);
+        counts[val] = (counts[val] || 0) + 1;
+    }
+    const totalSamples = Object.values(counts).reduce((a, b) => a + b, 0) || 1;
+    const result = { _total: areaHa, _method: 'sampling' };
+    for (const k in counts) { result[k] = areaHa * (counts[k] / totalSamples); }
+    return result;
 }
 
 async function mapWithConcurrency(items, limit, fn) {
@@ -1260,7 +1464,7 @@ async function triggerSpatialAnalysis() {
     if (!data.points.length && !data.lines.length && !data.polygons.length) {
         return c.innerHTML = '<p style="text-align:center; padding:30px; color:var(--text-muted);">No hay datos ingresados para analizar.</p>';
     }
-    c.innerHTML = '<div class="spinner-container"><div class="loader"></div><p id="analysis-status-text" style="font-weight:bold; margin-top:12px; color:var(--primary);">Iniciando motor de muestreo...</p></div>';
+    c.innerHTML = '<div class="spinner-container"><div class="loader"></div><p id="analysis-status-text" style="font-weight:bold; margin-top:12px; color:var(--primary);">Iniciando motor de análisis espacial (intersección JSTS)...</p></div>';
     btn.style.display = 'none';
 
     try {
@@ -1293,35 +1497,40 @@ async function runSpatialAnalysis() {
         }
     }
     
-    // ANALISIS DE LINEAS (Vértices)
+    // ANALISIS DE LINEAS – Geoproceso Intersección JSTS (fallback: muestreo)
     if (data.lines.length > 0) {
-        res.lines = { ids: data.lines.map(l => l.id), classif: {} };
+        res.lines = { ids: data.lines.map(l => l.id), lengths: {}, classif: {} };
         let totalMeters = 0;
         data.lines.forEach(l => {
-            for (let i = 1; i < l.geom.length; i++) {
-                const dx = l.geom[i][0] - l.geom[i - 1][0];
-                const dy = l.geom[i][1] - l.geom[i - 1][1];
-                totalMeters += Math.sqrt(dx * dx + dy * dy);
-            }
+            const len = calcLineLength(l.geom);
+            res.lines.lengths[l.id] = len;
+            totalMeters += len;
         });
         res.metrics.lineCount = data.lines.length;
         res.metrics.lineMeters = totalMeters;
         for (const c of config) {
             if (!c.enabled) continue;
             res.lines.classif[c.name] = {};
-            await mapWithConcurrency(data.lines, ANALYSIS_CONCURRENCY, async (l) => {
-                const covs = await fetchLineCoverages(l.geom, c, l.id, updateStatus);
-                const dominant = Object.keys(covs)[0] || 'SIN_DATO';
-                if (!res.lines.classif[c.name][dominant]) res.lines.classif[c.name][dominant] = {};
-                res.lines.classif[c.name][dominant][l.id] = 1;
-            });
+            for (const l of data.lines) {
+                const lineJSTS = userLineToJSTS(l.geom);
+                if (!lineJSTS) {
+                    res.lines.classif[c.name][l.id] = { 'ERROR_GEOM': res.lines.lengths[l.id], _total: res.lines.lengths[l.id], _method: 'error' };
+                    continue;
+                }
+                let intResult = await geoprocessIntersection(lineJSTS, c, 'line', l.id, updateStatus);
+                if (intResult._noData || intResult._total === 0) {
+                    // Fallback a muestreo si WFS no retorna features
+                    await updateStatus(`⚠ Sin geometrías WFS para ${l.id} en ${c.name}, usando muestreo...`);
+                    intResult = await fallbackLineSampling(l.geom, c, l.id, res.lines.lengths[l.id], updateStatus);
+                }
+                res.lines.classif[c.name][l.id] = intResult;
+            }
         }
     }
 
-    // ANALISIS DE POLÍGONOS (Desglose de coberturas y superficie)
+    // ANALISIS DE POLÍGONOS – Geoproceso Intersección JSTS (fallback: muestreo)
     if (data.polygons.length > 0) {
         res.polygons = { ids: data.polygons.map(p => p.id), areas: {}, classif: {} };
-        // Calcular área individual de cada polígono (Shoelace, CRTM05 es métrico)
         let totalArea = 0;
         data.polygons.forEach(pol => {
             let area = 0;
@@ -1332,7 +1541,7 @@ async function runSpatialAnalysis() {
                 area -= g[j][0] * g[i][1];
             }
             const areaM2 = Math.abs(area) / 2;
-            res.polygons.areas[pol.id] = areaM2 / 10000; // m² a hectáreas
+            res.polygons.areas[pol.id] = areaM2 / 10000; // m² → ha
             totalArea += areaM2;
         });
         res.metrics.polyCount = data.polygons.length;
@@ -1341,20 +1550,19 @@ async function runSpatialAnalysis() {
         for (const c of config) {
             if (!c.enabled) continue;
             res.polygons.classif[c.name] = {};
-            await mapWithConcurrency(data.polygons, ANALYSIS_CONCURRENCY, async (pol) => {
-                // Muestrear con grilla interior + vértices del polígono
-                const samplePoints = generatePolygonSampleGrid(pol.geom, MAX_LINE_SAMPLE_POINTS);
-                const covCounts = {};
-                let totalSamples = 0;
-                for (let i = 0; i < samplePoints.length; i++) {
-                    await updateStatus(`Analizando muestra ${i + 1}/${samplePoints.length} de Polígono ${pol.id} en ${c.name}...`);
-                    const val = await fetchPointCoverage(samplePoints[i], c);
-                    covCounts[val] = (covCounts[val] || 0) + 1;
-                    totalSamples++;
+            for (const pol of data.polygons) {
+                const polyJSTS = userPolygonToJSTS(pol.geom);
+                if (!polyJSTS) {
+                    res.polygons.classif[c.name][pol.id] = { 'ERROR_GEOM': res.polygons.areas[pol.id], _total: res.polygons.areas[pol.id], _method: 'error' };
+                    continue;
                 }
-                covCounts._total = totalSamples;
-                res.polygons.classif[c.name][pol.id] = covCounts;
-            });
+                let intResult = await geoprocessIntersection(polyJSTS, c, 'polygon', pol.id, updateStatus);
+                if (intResult._noData || intResult._total === 0) {
+                    await updateStatus(`⚠ Sin geometrías WFS para ${pol.id} en ${c.name}, usando muestreo...`);
+                    intResult = await fallbackPolygonSampling(pol, c, updateStatus);
+                }
+                res.polygons.classif[c.name][pol.id] = intResult;
+            }
         }
     }
 
@@ -1396,7 +1604,7 @@ function renderAnalysisUI(results) {
     metricItems.forEach(mi => { html += `<div>${mi}</div>`; });
     html += `</div>`;
     html += `<div style="margin-top:8px; font-size:11px; color:var(--text-muted); border-top:1px solid var(--success); padding-top:6px;">`;
-    html += `Rendimiento: <b>${throughput} objetos/s</b> · Capas: <b>${enabledConfig.length}</b>`;
+    html += `Rendimiento: <b>${throughput} objetos/s</b> · Capas: <b>${enabledConfig.length}</b> · Motor: <b>Intersección JSTS</b>`;
     html += `</div></div>`;
 
     // ====== TABLA DE PUNTOS ======
@@ -1431,29 +1639,57 @@ function renderAnalysisUI(results) {
         html += '</div>';
     }
     
-    // ====== TABLA DE LÍNEAS ======
+    // ====== TABLA DE LÍNEAS (Intersección Geométrica) ======
     if (results.lines) {
-        html += '<div class="report-section"><h4>📈 Líneas (Predominancia)</h4><div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th>';
+        // Tabla principal: ID, Longitud, Predominante por capa
+        html += '<div class="report-section"><h4>📈 Líneas (Intersección Geométrica)</h4>';
+        html += '<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th><th>Longitud (m)</th>';
         enabledConfig.forEach(c => html += `<th>${c.name}</th>`);
         html += '</tr></thead><tbody>';
         results.lines.ids.forEach(id => {
-            html += `<tr><td><b>${id}</b></td>`;
+            const lineLen = (results.lines.lengths[id] || 0);
+            html += `<tr><td><b>${id}</b></td><td>${lineLen.toFixed(2)}</td>`;
             enabledConfig.forEach(c => {
-                let val = 'SIN_DATO';
-                for (let k in results.lines.classif[c.name]) {
-                    if (results.lines.classif[c.name][k][id] === 1) val = k;
+                const covs = results.lines.classif[c.name][id] || {};
+                let dominant = 'SIN_DATO'; let maxVal = 0;
+                for (let k in covs) {
+                    if (k.startsWith('_')) continue;
+                    if (covs[k] > maxVal) { maxVal = covs[k]; dominant = k; }
                 }
-                html += `<td>${val}</td>`;
+                html += `<td>${dominant}</td>`;
             });
             html += '</tr>';
         });
-        html += '</tbody></table></div></div>';
+        html += '</tbody></table></div>';
+
+        // Desglose de coberturas por línea y por capa
+        enabledConfig.forEach(c => {
+            html += `<div style="margin-top:16px;"><h4 style="margin-bottom:8px; color:var(--info); font-size:12px;">Desglose de Coberturas – ${c.name}</h4>`;
+            html += '<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>Línea</th><th>Long. Total (m)</th><th>Cobertura</th><th>Longitud (m)</th><th>Proporción (%)</th><th>Método</th></tr></thead><tbody>';
+            results.lines.ids.forEach(id => {
+                const lineLen = results.lines.lengths[id] || 0;
+                const covs = results.lines.classif[c.name][id] || {};
+                const method = covs._method || 'N/A';
+                const sorted = Object.keys(covs).filter(k => !k.startsWith('_')).sort((a, b) => covs[b] - covs[a]);
+                if (sorted.length === 0) {
+                    html += `<tr><td><b>${id}</b></td><td>${lineLen.toFixed(2)}</td><td>SIN_DATO</td><td>—</td><td>—</td><td>${method}</td></tr>`;
+                } else {
+                    sorted.forEach((cov, ci) => {
+                        const covLen = covs[cov];
+                        const pct = lineLen > 0 ? (covLen / lineLen * 100) : 0;
+                        html += `<tr><td>${ci === 0 ? '<b>' + id + '</b>' : ''}</td><td>${ci === 0 ? lineLen.toFixed(2) : ''}</td><td>${cov}</td><td>${covLen.toFixed(2)}</td><td>${pct.toFixed(1)}</td><td>${ci === 0 ? method : ''}</td></tr>`;
+                    });
+                }
+            });
+            html += '</tbody></table></div></div>';
+        });
+        html += '</div>';
     }
 
-    // ====== TABLA DE POLÍGONOS CON DESGLOSE ======
+    // ====== TABLA DE POLÍGONOS (Intersección Geométrica) ======
     if (results.polygons) {
-        // Tabla principal: ID, Área, Predominante por capa
-        html += '<div class="report-section"><h4>⬡ Polígonos</h4>';
+        // Tabla principal: ID, Área Shoelace, Predominante por capa
+        html += '<div class="report-section"><h4>⬡ Polígonos (Intersección Geométrica)</h4>';
         html += '<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>ID</th><th>Área (ha)</th>';
         enabledConfig.forEach(c => html += `<th>${c.name}</th>`);
         html += '</tr></thead><tbody>';
@@ -1462,10 +1698,10 @@ function renderAnalysisUI(results) {
             html += `<tr><td><b>${id}</b></td><td>${areaHa.toFixed(6)}</td>`;
             enabledConfig.forEach(c => {
                 const covs = results.polygons.classif[c.name][id] || {};
-                let dominant = 'SIN_DATO'; let maxCount = 0;
+                let dominant = 'SIN_DATO'; let maxVal = 0;
                 for (let k in covs) {
-                    if (k === '_total') continue;
-                    if (covs[k] > maxCount) { maxCount = covs[k]; dominant = k; }
+                    if (k.startsWith('_')) continue;
+                    if (covs[k] > maxVal) { maxVal = covs[k]; dominant = k; }
                 }
                 html += `<td>${dominant}</td>`;
             });
@@ -1473,23 +1709,22 @@ function renderAnalysisUI(results) {
         });
         html += '</tbody></table></div>';
 
-        // Desglose de coberturas por polígono y por capa
+        // Desglose de coberturas por polígono y por capa — ÁREAS EXACTAS
         enabledConfig.forEach(c => {
             html += `<div style="margin-top:16px;"><h4 style="margin-bottom:8px; color:var(--info); font-size:12px;">Desglose de Coberturas – ${c.name}</h4>`;
-            html += '<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>Polígono</th><th>Área Total (ha)</th><th>Cobertura</th><th>Muestras</th><th>Proporción (%)</th><th>Área Estimada (ha)</th></tr></thead><tbody>';
+            html += '<div class="report-table-wrapper"><table class="report-table"><thead><tr><th>Polígono</th><th>Área Total (ha)</th><th>Cobertura</th><th>Área Intersección (ha)</th><th>Proporción (%)</th><th>Método</th></tr></thead><tbody>';
             results.polygons.ids.forEach(id => {
                 const areaHa = results.polygons.areas[id] || 0;
                 const covs = results.polygons.classif[c.name][id] || {};
-                const total = covs._total || 1;
-                const sorted = Object.keys(covs).filter(k => k !== '_total').sort((a, b) => covs[b] - covs[a]);
+                const method = covs._method || 'N/A';
+                const sorted = Object.keys(covs).filter(k => !k.startsWith('_')).sort((a, b) => covs[b] - covs[a]);
                 if (sorted.length === 0) {
-                    html += `<tr><td><b>${id}</b></td><td>${areaHa.toFixed(6)}</td><td>SIN_DATO</td><td>0</td><td>—</td><td>—</td></tr>`;
+                    html += `<tr><td><b>${id}</b></td><td>${areaHa.toFixed(6)}</td><td>SIN_DATO</td><td>—</td><td>—</td><td>${method}</td></tr>`;
                 } else {
                     sorted.forEach((cov, ci) => {
-                        const count = covs[cov];
-                        const pct = (count / total * 100);
-                        const covArea = areaHa * (count / total);
-                        html += `<tr><td>${ci === 0 ? '<b>' + id + '</b>' : ''}</td><td>${ci === 0 ? areaHa.toFixed(6) : ''}</td><td>${cov}</td><td>${count}/${total}</td><td>${pct.toFixed(1)}</td><td>${covArea.toFixed(6)}</td></tr>`;
+                        const covArea = covs[cov]; // Área exacta de intersección en ha
+                        const pct = areaHa > 0 ? (covArea / areaHa * 100) : 0;
+                        html += `<tr><td>${ci === 0 ? '<b>' + id + '</b>' : ''}</td><td>${ci === 0 ? areaHa.toFixed(6) : ''}</td><td>${cov}</td><td>${covArea.toFixed(6)}</td><td>${pct.toFixed(1)}</td><td>${ci === 0 ? method : ''}</td></tr>`;
                     });
                 }
             });
@@ -1813,7 +2048,7 @@ async function generateMapPNG(coverageConfig) {
         ``,
         `Elaborado por:`,
         `Ing. Pablo Sánchez, ACOPAC`,
-        `COBERTURA CR v7.0`,
+        `COBERTURA CR v7.1`,
         ``,
         `Fecha: ${new Date().toLocaleString('es-CR')}`
     ];
@@ -1948,21 +2183,42 @@ async function downloadReport() {
     }
     
     if (globalAnalysisResults.lines) {
-        ws_data.push(["RESULTADOS LINEAS (Predominancia en vértices)"]);
-        let header = ["ID"].concat(enabledConfig.map(c => c.name));
+        ws_data.push(["RESULTADOS LÍNEAS (Intersección Geométrica)"]);
+        let header = ["ID", "Longitud (m)"].concat(enabledConfig.map(c => c.name + ' (Predominante)'));
         ws_data.push(header);
         globalAnalysisResults.lines.ids.forEach(id => {
-            let row = [id];
+            const lineLen = globalAnalysisResults.lines.lengths[id] || 0;
+            let row = [id, parseFloat(lineLen.toFixed(2))];
             enabledConfig.forEach(c => {
-                let val = 'SIN_DATO';
-                for (let k in globalAnalysisResults.lines.classif[c.name]) {
-                    if (globalAnalysisResults.lines.classif[c.name][k][id] === 1) val = k;
+                const covs = globalAnalysisResults.lines.classif[c.name][id] || {};
+                let dominant = 'SIN_DATO'; let maxVal = 0;
+                for (let k in covs) {
+                    if (k.startsWith('_')) continue;
+                    if (covs[k] > maxVal) { maxVal = covs[k]; dominant = k; }
                 }
-                row.push(val);
+                row.push(dominant);
             });
             ws_data.push(row);
         });
         ws_data.push([]); ws_data.push([]);
+
+        // Desglose por capa
+        enabledConfig.forEach(c => {
+            ws_data.push([`DESGLOSE COBERTURAS LÍNEAS – ${c.name}`]);
+            ws_data.push(["Línea", "Longitud Total (m)", "Cobertura", "Longitud Intersección (m)", "Proporción (%)", "Método"]);
+            globalAnalysisResults.lines.ids.forEach(id => {
+                const lineLen = globalAnalysisResults.lines.lengths[id] || 0;
+                const covs = globalAnalysisResults.lines.classif[c.name][id] || {};
+                const method = covs._method || 'N/A';
+                const sorted = Object.keys(covs).filter(k => !k.startsWith('_')).sort((a, b) => covs[b] - covs[a]);
+                sorted.forEach((cov, ci) => {
+                    const covLen = covs[cov];
+                    const pct = lineLen > 0 ? parseFloat((covLen / lineLen * 100).toFixed(1)) : 0;
+                    ws_data.push([ci === 0 ? id : '', ci === 0 ? parseFloat(lineLen.toFixed(2)) : '', cov, parseFloat(covLen.toFixed(2)), pct, ci === 0 ? method : '']);
+                });
+            });
+            ws_data.push([]); ws_data.push([]);
+        });
     }
 
     if (globalAnalysisResults.polygons) {
@@ -1985,20 +2241,19 @@ async function downloadReport() {
         });
         ws_data.push([]); ws_data.push([]);
 
-        // Desglose por capa
+        // Desglose por capa – ÁREAS EXACTAS DE INTERSECCIÓN
         enabledConfig.forEach(c => {
             ws_data.push([`DESGLOSE COBERTURAS – ${c.name}`]);
-            ws_data.push(["Polígono", "Área Total (ha)", "Cobertura", "Muestras", "Proporción (%)", "Área Estimada (ha)"]);
+            ws_data.push(["Polígono", "Área Total (ha)", "Cobertura", "Área Intersección (ha)", "Proporción (%)", "Método"]);
             globalAnalysisResults.polygons.ids.forEach(id => {
                 const areaHa = globalAnalysisResults.polygons.areas[id] || 0;
                 const covs = globalAnalysisResults.polygons.classif[c.name][id] || {};
-                const total = covs._total || 1;
-                const sorted = Object.keys(covs).filter(k => k !== '_total').sort((a, b) => covs[b] - covs[a]);
+                const method = covs._method || 'N/A';
+                const sorted = Object.keys(covs).filter(k => !k.startsWith('_')).sort((a, b) => covs[b] - covs[a]);
                 sorted.forEach((cov, ci) => {
-                    const count = covs[cov];
-                    const pct = parseFloat((count / total * 100).toFixed(1));
-                    const covArea = parseFloat((areaHa * (count / total)).toFixed(6));
-                    ws_data.push([ci === 0 ? id : '', ci === 0 ? parseFloat(areaHa.toFixed(6)) : '', cov, `${count}/${total}`, pct, covArea]);
+                    const covArea = covs[cov]; // Área exacta
+                    const pct = areaHa > 0 ? parseFloat((covArea / areaHa * 100).toFixed(1)) : 0;
+                    ws_data.push([ci === 0 ? id : '', ci === 0 ? parseFloat(areaHa.toFixed(6)) : '', cov, parseFloat(covArea.toFixed(6)), pct, ci === 0 ? method : '']);
                 });
             });
             ws_data.push([]); ws_data.push([]);
@@ -2060,6 +2315,64 @@ async function downloadReport() {
     });
     zip.file(`${reportName}.geojson`, JSON.stringify({ type: 'FeatureCollection', features: geoFeatures }, null, 2));
 
+    // ====== GeoJSON de intersecciones (capas de cruce) ======
+    const intFolder = zip.folder('Intersecciones');
+    for (const c of enabledConfig) {
+        const intFeatures = [];
+        const safeName = c.name.replace(/[^a-zA-Z0-9áéíóúñÁÉÍÓÚÑ ]/g, '').replace(/ /g, '_');
+
+        // Intersecciones de polígonos
+        if (globalAnalysisResults.polygons) {
+            globalAnalysisResults.polygons.ids.forEach(id => {
+                const covs = globalAnalysisResults.polygons.classif[c.name][id] || {};
+                if (covs._intersections) {
+                    covs._intersections.forEach(int => {
+                        intFeatures.push({
+                            type: 'Feature',
+                            properties: {
+                                origen_id: id,
+                                tipo_origen: 'Polígono',
+                                cobertura: int.covType,
+                                area_ha: parseFloat(int.measure.toFixed(6)),
+                                capa: c.name
+                            },
+                            geometry: int.geojson
+                        });
+                    });
+                }
+            });
+        }
+        // Intersecciones de líneas
+        if (globalAnalysisResults.lines) {
+            globalAnalysisResults.lines.ids.forEach(id => {
+                const covs = globalAnalysisResults.lines.classif[c.name][id] || {};
+                if (covs._intersections) {
+                    covs._intersections.forEach(int => {
+                        intFeatures.push({
+                            type: 'Feature',
+                            properties: {
+                                origen_id: id,
+                                tipo_origen: 'Línea',
+                                cobertura: int.covType,
+                                longitud_m: parseFloat(int.measure.toFixed(2)),
+                                capa: c.name
+                            },
+                            geometry: int.geojson
+                        });
+                    });
+                }
+            });
+        }
+        if (intFeatures.length > 0) {
+            intFolder.file(`Interseccion_${safeName}.geojson`, JSON.stringify({
+                type: 'FeatureCollection',
+                name: `Intersección con ${c.name}`,
+                crs: { type: 'name', properties: { name: 'urn:ogc:def:crs:OGC:1.3:CRS84' } },
+                features: intFeatures
+            }, null, 2));
+        }
+    }
+
     // ====== Generar mapas PNG para cada capa de cobertura ======
     const mapFolder = zip.folder('Mapas');
     for (const c of enabledConfig) {
@@ -2082,7 +2395,7 @@ async function downloadReport() {
 // ==========================================
 // SERVICE WORKER + AUTO-LIMPIEZA DE CACHÉ
 // ==========================================
-const APP_VERSION = '7.0.1';
+const APP_VERSION = '7.1.0';
 
 (function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
