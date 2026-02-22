@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gis-cr-cache-v7.0.1';
+const CACHE_NAME = 'gis-cr-cache-v7.1.0';
 const urlsToCache = [
   './',
   './index.html',
