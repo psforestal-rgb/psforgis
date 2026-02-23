@@ -1,4 +1,4 @@
-const CACHE_NAME = 'gis-cr-cache-v7.2.0';
+const CACHE_NAME = 'gis-cr-cache-v7.3.0';
 const urlsToCache = [
   './',
   './index.html',
@@ -17,7 +17,7 @@ const urlsToCache = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME).then(async cache => {
-      console.log('Instalando caché PWA v7.2.0 (JSTS Intersection)...');
+      console.log('Instalando caché PWA v7.3.0 (JSTS Intersection)...');
       for (const url of urlsToCache) {
         try {
           await cache.add(url);
