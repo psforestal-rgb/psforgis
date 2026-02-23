@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>COBERTURA CR v7.2 – Motor de Análisis Espacial</title>
+<title>COBERTURA CR v7.3 – Motor de Análisis Espacial</title>
 
 <link rel="manifest" href="manifest.json">
 <meta name="theme-color" content="#2e7d32">
@@ -219,7 +219,7 @@ textarea { resize: vertical; min-height: 80px; font-family: var(--font-mono); }
           <div class="brand-sub brand-sub-mono">✉ pablo.sanchez@sinac.go.cr · 📞 (506) 6126-7123</div>
         </div>
       </div>
-      <div class="brand-actions"><span class="badge">v7.2</span> <button class="btn-secondary btn-icon-only" onclick="toggleTheme()" title="Cambiar Tema">◑</button></div>
+      <div class="brand-actions"><span class="badge">v7.3</span> <button class="btn-secondary btn-icon-only" onclick="toggleTheme()" title="Cambiar Tema">◑</button></div>
     </div>
     <div id="topbar">
       <div class="tab active" data-tab="data" onclick="switchMainTab('data')">📁 Datos</div>
@@ -1176,7 +1176,7 @@ async function fetchPointCoverage(pGeom, c) {
 }
 
 // ==========================================
-// MOTOR DE ANÁLISIS ESPACIAL v7.2
+// MOTOR DE ANÁLISIS ESPACIAL v7.3
 // Polígonos: Grilla sistemática con área exacta por celda (CRTM05 métrico)
 // Líneas: Muestreo a intervalos regulares con longitud exacta por segmento
 // Puntos: Consulta WFS puntual (sin cambios)
@@ -1543,6 +1543,243 @@ async function runJSTSIntersection(userJSTSGeom, layerConfig, geomType, featureI
 }
 
 // ==========================================
+// MOTOR WMS RASTER (para capas lentas)
+// 1 imagen WMS → lectura de píxeles → identificación por color
+// Ventaja: 1 request + 2-5 consultas puntuales vs. cientos de queries
+// ==========================================
+
+// Detecta si un servidor WFS es lento (FONAFIFO en www.sirefor.go.cr)
+function isSlowWFS(layerConfig) {
+    return layerConfig.wfs.includes('www.sirefor.go.cr');
+}
+
+// Carga imagen vía proxy como blob → Image (sin tainted canvas)
+async function loadProxyImageAsBlob(targetUrl, timeoutMs) {
+    timeoutMs = timeoutMs || 20000;
+    const proxyUrl = OGC_PROXY_BASE + encodeURIComponent(targetUrl);
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), timeoutMs);
+    try {
+        const resp = await fetch(proxyUrl, { signal: ctrl.signal });
+        clearTimeout(tid);
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        const blob = await resp.blob();
+        if (blob.size < 100) throw new Error('Image too small');
+        const blobUrl = URL.createObjectURL(blob);
+        const img = await new Promise((resolve, reject) => {
+            const el = new Image();
+            el.onload = () => resolve(el);
+            el.onerror = () => reject(new Error('Image decode failed'));
+            el.src = blobUrl;
+        });
+        URL.revokeObjectURL(blobUrl);
+        return img;
+    } catch(e) {
+        clearTimeout(tid);
+        throw e;
+    }
+}
+
+// Construye URL WMS GetMap para un bbox en CRTM05
+function buildWMSUrl(layerConfig, minX, minY, maxX, maxY, width, height) {
+    const wmsBase = layerConfig.wfs.replace(/\/wfs$/, '/wms');
+    let wmsBbox, wmsSrs;
+    if (layerConfig.srs === 'EPSG:4326') {
+        const sw = proj4('EPSG:8908', 'EPSG:4326', [minX, minY]);
+        const ne = proj4('EPSG:8908', 'EPSG:4326', [maxX, maxY]);
+        wmsBbox = `${sw[0]},${sw[1]},${ne[0]},${ne[1]}`;
+        wmsSrs = 'EPSG:4326';
+    } else {
+        wmsBbox = `${minX},${minY},${maxX},${maxY}`;
+        wmsSrs = layerConfig.srs;
+    }
+    return `${wmsBase}?service=WMS&version=1.1.1&request=GetMap&layers=${layerConfig.type}` +
+        `&bbox=${wmsBbox}&width=${width}&height=${height}&srs=${wmsSrs}&format=image/png&transparent=true`;
+}
+
+// Análisis raster WMS para POLÍGONOS en capas lentas
+async function wmsRasterPolygonAnalysis(pol, layerConfig, areaHa, updateStatus) {
+    const geom = pol.geom;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    geom.forEach(v => { minX = Math.min(minX, v[0]); minY = Math.min(minY, v[1]); maxX = Math.max(maxX, v[0]); maxY = Math.max(maxY, v[1]); });
+    const pad = Math.max(maxX - minX, maxY - minY) * 0.05 + 5;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+
+    // Resolución adaptativa: ~1-2m/px → suficiente para dm²
+    const bboxW = maxX - minX, bboxH = maxY - minY;
+    const maxPx = 800;
+    let cW, cH;
+    if (bboxW >= bboxH) { cW = Math.min(maxPx, Math.ceil(bboxW / 1.5)); cH = Math.max(1, Math.round(cW * bboxH / bboxW)); }
+    else { cH = Math.min(maxPx, Math.ceil(bboxH / 1.5)); cW = Math.max(1, Math.round(cH * bboxW / bboxH)); }
+    const pxW = bboxW / cW, pxH = bboxH / cH;
+    const pxAreaHa = (pxW * pxH) / 10000;
+
+    console.log(`🖼 WMS Raster: ${pol.id}×${layerConfig.name} → ${cW}×${cH}px (${pxW.toFixed(1)}×${pxH.toFixed(1)}m/px)`);
+    await updateStatus(`🖼 Descargando imagen WMS de ${layerConfig.name} para ${pol.id} (${cW}×${cH}px)...`);
+
+    // Descargar imagen WMS como blob
+    let imgEl;
+    try {
+        const wmsUrl = buildWMSUrl(layerConfig, minX, minY, maxX, maxY, cW, cH);
+        imgEl = await loadProxyImageAsBlob(wmsUrl, 20000);
+    } catch(e) {
+        console.warn(`❌ WMS image failed for ${pol.id}×${layerConfig.name}: ${e.message}`);
+        return null; // Fallback a grilla
+    }
+
+    // Dibujar en canvas y leer píxeles
+    const canvas = document.createElement('canvas');
+    canvas.width = cW; canvas.height = cH;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(imgEl, 0, 0, cW, cH);
+
+    let imageData;
+    try {
+        imageData = ctx.getImageData(0, 0, cW, cH);
+    } catch(e) {
+        console.warn(`❌ Canvas tainted for ${pol.id}×${layerConfig.name}: ${e.message}`);
+        return null;
+    }
+    const pixels = imageData.data;
+
+    // Recorrer píxeles dentro del polígono
+    await updateStatus(`🔍 Muestreando colores de ${pol.id} en ${layerConfig.name}...`);
+    const colorCounts = {};
+    const colorSampleCoord = {}; // Primera coordenada CRTM05 de cada color
+    let totalInside = 0;
+
+    for (let py = 0; py < cH; py++) {
+        for (let px = 0; px < cW; px++) {
+            const crtmX = minX + (px + 0.5) * pxW;
+            const crtmY = maxY - (py + 0.5) * pxH; // Y invertido en canvas
+            if (!pointInPolygon(crtmX, crtmY, geom)) continue;
+
+            const idx = (py * cW + px) * 4;
+            const a = pixels[idx + 3];
+            if (a < 50) continue; // Transparente = sin dato
+
+            const key = `${pixels[idx]},${pixels[idx + 1]},${pixels[idx + 2]}`;
+            colorCounts[key] = (colorCounts[key] || 0) + 1;
+            if (!colorSampleCoord[key]) colorSampleCoord[key] = [crtmX, crtmY];
+            totalInside++;
+        }
+    }
+
+    if (totalInside === 0) {
+        console.warn(`⚠ WMS raster: 0 píxeles con dato en ${pol.id}×${layerConfig.name}`);
+        return null;
+    }
+
+    // Identificar cada color único con UNA consulta puntual
+    const uniqueColors = Object.keys(colorCounts);
+    await updateStatus(`🏷 Identificando ${uniqueColors.length} colores en ${pol.id} (${totalInside} px)...`);
+    console.log(`  → ${uniqueColors.length} colores únicos, ${totalInside} píxeles dentro del polígono`);
+
+    const colorToType = {};
+    for (const key of uniqueColors) {
+        const coord = colorSampleCoord[key];
+        colorToType[key] = await fetchPointCoverage(coord, layerConfig);
+    }
+
+    // Agregar áreas por tipo de cobertura
+    const result = { _total: 0, _method: 'wms_raster', _resolution: `${pxW.toFixed(1)}m/px`, _pixels: totalInside };
+    for (const [key, count] of Object.entries(colorCounts)) {
+        const covType = colorToType[key] || 'SIN_DATO';
+        const area = count * pxAreaHa;
+        result[covType] = (result[covType] || 0) + area;
+        result._total += area;
+    }
+
+    console.log(`✔ WMS Raster ${pol.id}×${layerConfig.name}: ${result._total.toFixed(4)} ha, colores: ${JSON.stringify(colorToType)}`);
+    return result;
+}
+
+// Análisis raster WMS para LÍNEAS en capas lentas
+async function wmsRasterLineAnalysis(line, layerConfig, lineLength, updateStatus) {
+    const geom = line.geom;
+    if (geom.length < 2) return null;
+
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    geom.forEach(v => { minX = Math.min(minX, v[0]); minY = Math.min(minY, v[1]); maxX = Math.max(maxX, v[0]); maxY = Math.max(maxY, v[1]); });
+    const pad = Math.max(maxX - minX, maxY - minY) * 0.1 + 10;
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+
+    const bboxW = maxX - minX, bboxH = maxY - minY;
+    const maxPx = 600;
+    let cW, cH;
+    if (bboxW >= bboxH) { cW = Math.min(maxPx, Math.ceil(bboxW / 2)); cH = Math.max(1, Math.round(cW * bboxH / bboxW)); }
+    else { cH = Math.min(maxPx, Math.ceil(bboxH / 2)); cW = Math.max(1, Math.round(cH * bboxW / bboxH)); }
+    const pxW = bboxW / cW, pxH = bboxH / cH;
+
+    await updateStatus(`🖼 Descargando WMS de ${layerConfig.name} para Línea ${line.id}...`);
+
+    let imgEl;
+    try {
+        const wmsUrl = buildWMSUrl(layerConfig, minX, minY, maxX, maxY, cW, cH);
+        imgEl = await loadProxyImageAsBlob(wmsUrl, 20000);
+    } catch(e) {
+        console.warn(`❌ WMS line image failed for ${line.id}×${layerConfig.name}: ${e.message}`);
+        return null;
+    }
+
+    const canvas = document.createElement('canvas');
+    canvas.width = cW; canvas.height = cH;
+    const ctx = canvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(imgEl, 0, 0, cW, cH);
+
+    let imageData;
+    try { imageData = ctx.getImageData(0, 0, cW, cH); } catch(e) { return null; }
+    const pixels = imageData.data;
+
+    // Caminar la línea a intervalos de ~2m y leer color en cada paso
+    await updateStatus(`🔍 Muestreando colores a lo largo de Línea ${line.id}...`);
+    const stepM = Math.max(2, Math.min(pxW, pxH)); // Paso = ~1 pixel
+    const samples = sampleLineAtIntervals(geom, stepM);
+
+    const colorCounts = {};
+    const colorSampleCoord = {};
+    let totalValid = 0;
+
+    for (const s of samples) {
+        const px = Math.floor((s.pt[0] - minX) / pxW);
+        const py = Math.floor((maxY - s.pt[1]) / pxH);
+        if (px < 0 || px >= cW || py < 0 || py >= cH) continue;
+
+        const idx = (py * cW + px) * 4;
+        const a = pixels[idx + 3];
+        if (a < 50) continue;
+
+        const key = `${pixels[idx]},${pixels[idx + 1]},${pixels[idx + 2]}`;
+        colorCounts[key] = (colorCounts[key] || 0) + 1;
+        if (!colorSampleCoord[key]) colorSampleCoord[key] = s.pt;
+        totalValid++;
+    }
+
+    if (totalValid === 0) return null;
+
+    // Identificar colores con consultas puntuales
+    const uniqueColors = Object.keys(colorCounts);
+    await updateStatus(`🏷 Identificando ${uniqueColors.length} colores en Línea ${line.id}...`);
+
+    const colorToType = {};
+    for (const key of uniqueColors) {
+        colorToType[key] = await fetchPointCoverage(colorSampleCoord[key], layerConfig);
+    }
+
+    // Distribuir longitud proporcionalmente por conteo de muestras
+    const result = { _total: 0, _method: 'wms_raster', _resolution: `${stepM.toFixed(0)}m paso`, _samples: totalValid };
+    for (const [key, count] of Object.entries(colorCounts)) {
+        const covType = colorToType[key] || 'SIN_DATO';
+        const len = lineLength * (count / totalValid);
+        result[covType] = (result[covType] || 0) + len;
+        result._total += len;
+    }
+
+    console.log(`✔ WMS Raster Línea ${line.id}×${layerConfig.name}: ${result._total.toFixed(1)}m`);
+    return result;
+}
+
+// ==========================================
 // SPATIAL ANALYSIS ENGINE
 // ==========================================
 async function triggerSpatialAnalysis() {
@@ -1584,7 +1821,7 @@ async function runSpatialAnalysis() {
         }
     }
     
-    // ANÁLISIS DE LÍNEAS – Intenta intersección JSTS primero, fallback a intervalos
+    // ANÁLISIS DE LÍNEAS – Ruta por velocidad de servidor
     if (data.lines.length > 0) {
         res.lines = { ids: data.lines.map(l => l.id), lengths: {}, classif: {} };
         let totalMeters = 0;
@@ -1599,16 +1836,21 @@ async function runSpatialAnalysis() {
             if (!c.enabled) continue;
             res.lines.classif[c.name] = {};
             for (const l of data.lines) {
-                // Método primario: Intersección JSTS (si disponible)
-                const lineJSTS = JSTS_AVAILABLE ? userLineToJSTS(l.geom) : null;
                 let result = null;
-                if (lineJSTS) {
-                    await updateStatus(`🔬 Intersección JSTS: Línea ${l.id} × ${c.name}...`);
-                    result = await runJSTSIntersection(lineJSTS, c, 'line', l.id, updateStatus);
+                if (isSlowWFS(c)) {
+                    // Capas lentas → WMS raster (1 imagen + 2-5 queries)
+                    result = await wmsRasterLineAnalysis(l, c, res.lines.lengths[l.id], updateStatus);
+                } else {
+                    // Capas rápidas → JSTS intersección
+                    const lineJSTS = JSTS_AVAILABLE ? userLineToJSTS(l.geom) : null;
+                    if (lineJSTS) {
+                        await updateStatus(`🔬 JSTS: Línea ${l.id} × ${c.name}...`);
+                        result = await runJSTSIntersection(lineJSTS, c, 'line', l.id, updateStatus);
+                    }
                 }
-                // 2) Fallback a muestreo por intervalos
+                // Fallback universal: muestreo por intervalos
                 if (!result) {
-                    await updateStatus(`📏 Fallback intervalos: Línea ${l.id} × ${c.name}...`);
+                    await updateStatus(`📏 Fallback: Línea ${l.id} × ${c.name}...`);
                     result = await intervalLineAnalysis(l, c, res.lines.lengths[l.id], updateStatus);
                 }
                 res.lines.classif[c.name][l.id] = result;
@@ -1616,7 +1858,7 @@ async function runSpatialAnalysis() {
         }
     }
 
-    // ANÁLISIS DE POLÍGONOS – Intenta intersección JSTS primero, fallback a grilla
+    // ANÁLISIS DE POLÍGONOS – Ruta por velocidad de servidor
     if (data.polygons.length > 0) {
         res.polygons = { ids: data.polygons.map(p => p.id), areas: {}, classif: {} };
         let totalArea = 0;
@@ -1639,16 +1881,21 @@ async function runSpatialAnalysis() {
             if (!c.enabled) continue;
             res.polygons.classif[c.name] = {};
             for (const pol of data.polygons) {
-                // Método primario: Intersección JSTS (si disponible)
-                const polyJSTS = JSTS_AVAILABLE ? userPolygonToJSTS(pol.geom) : null;
                 let result = null;
-                if (polyJSTS) {
-                    await updateStatus(`🔬 Intersección JSTS: ${pol.id} × ${c.name}...`);
-                    result = await runJSTSIntersection(polyJSTS, c, 'polygon', pol.id, updateStatus);
+                if (isSlowWFS(c)) {
+                    // Capas lentas → WMS raster (1 imagen + 2-5 queries de color)
+                    result = await wmsRasterPolygonAnalysis(pol, c, res.polygons.areas[pol.id], updateStatus);
+                } else {
+                    // Capas rápidas → JSTS intersección
+                    const polyJSTS = JSTS_AVAILABLE ? userPolygonToJSTS(pol.geom) : null;
+                    if (polyJSTS) {
+                        await updateStatus(`🔬 JSTS: ${pol.id} × ${c.name}...`);
+                        result = await runJSTSIntersection(polyJSTS, c, 'polygon', pol.id, updateStatus);
+                    }
                 }
-                // 2) Fallback a grilla
+                // Fallback universal: grilla
                 if (!result) {
-                    await updateStatus(`📐 Fallback grilla: ${pol.id} × ${c.name}...`);
+                    await updateStatus(`📐 Fallback: ${pol.id} × ${c.name}...`);
                     result = await gridPolygonAnalysis(pol, c, res.polygons.areas[pol.id], updateStatus);
                 }
                 res.polygons.classif[c.name][pol.id] = result;
@@ -1694,7 +1941,7 @@ function renderAnalysisUI(results) {
     metricItems.forEach(mi => { html += `<div>${mi}</div>`; });
     html += `</div>`;
     html += `<div style="margin-top:8px; font-size:11px; color:var(--text-muted); border-top:1px solid var(--success); padding-top:6px;">`;
-    html += `Rendimiento: <b>${throughput} objetos/s</b> · Capas: <b>${enabledConfig.length}</b> · Motor: <b>JSTS + Fallback Grilla</b>`;
+    html += `Rendimiento: <b>${throughput} objetos/s</b> · Capas: <b>${enabledConfig.length}</b> · Motor: <b>JSTS + WMS Raster</b>`;
     html += `</div></div>`;
 
     // ====== TABLA DE PUNTOS ======
@@ -2138,7 +2385,7 @@ async function generateMapPNG(coverageConfig) {
         ``,
         `Elaborado por:`,
         `Ing. Pablo Sánchez, ACOPAC`,
-        `COBERTURA CR v7.2`,
+        `COBERTURA CR v7.3`,
         ``,
         `Fecha: ${new Date().toLocaleString('es-CR')}`
     ];
@@ -2459,7 +2706,7 @@ async function downloadReport() {
 // ==========================================
 // SERVICE WORKER + AUTO-LIMPIEZA DE CACHÉ
 // ==========================================
-const APP_VERSION = '7.2.0';
+const APP_VERSION = '7.3.0';
 
 (function initServiceWorker() {
     if (!('serviceWorker' in navigator)) return;
