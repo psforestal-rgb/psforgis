@@ -82,10 +82,10 @@ textarea{resize:vertical;min-height:80px;font-family:var(--font-mono)}
 /* HEADER - Banda escarlata */
 #sidebar-header{padding:0;background:var(--scarlet);border-bottom:none;display:flex;align-items:stretch;flex-shrink:0;overflow:hidden;min-height:auto}
 .brand{display:flex;align-items:center;gap:10px;padding:10px 14px;min-width:0;overflow:hidden;flex:1}
-.brand-logo{width:48px;height:48px;flex-shrink:0;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);box-shadow:0 2px 6px rgba(0,0,0,0.2)}
+.brand-logo{width:64px;height:64px;flex-shrink:0;border-radius:50%;object-fit:cover;border:2px solid rgba(255,255,255,0.3);box-shadow:0 2px 6px rgba(0,0,0,0.2)}
 .brand-text{display:flex;flex-direction:column;gap:1px;min-width:0;flex:1;overflow:hidden}
-.brand h2{font-size:15px;font-weight:700;margin:0;color:var(--gold);letter-spacing:0.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.brand-sub{font-size:10.5px;font-weight:400;color:rgba(255,255,255,0.85);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.brand h2{font-size:15px;font-weight:800;margin:0;color:var(--gold);letter-spacing:0.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-shadow:1px 1px 3px rgba(0,0,0,0.5),0 0 8px rgba(0,0,0,0.3)}
+.brand-sub{font-size:10.5px;font-weight:400;color:#4FC3F7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
 .brand-contact{display:flex;align-items:center;gap:4px;font-size:10px;font-weight:400;color:var(--cobalt-light);line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-mono)}
 .brand-contact svg{flex-shrink:0;color:var(--gold);opacity:0.9}
 .brand-actions{display:flex;align-items:center;gap:6px;flex-shrink:0;padding-right:12px}
@@ -137,13 +137,30 @@ textarea{resize:vertical;min-height:80px;font-family:var(--font-mono)}
 #layers-panel{position:absolute;top:16px;left:56px;width:300px;max-height:80vh;background:var(--surface);border-radius:var(--radius);z-index:2000;display:flex;flex-direction:column;overflow:hidden;border:1px solid var(--border);box-shadow:var(--shadow-lg)}
 #layers-panel.hidden{display:none}
 #layers-panel-header{padding:10px 14px;background:var(--scarlet);border-bottom:none;display:flex;justify-content:space-between;align-items:center}
-#layers-panel-header h3{font-size:12px;margin:0;color:#fff;font-weight:600;letter-spacing:0.03em;border:none;padding:0;text-transform:none}
-#layers-panel-header .btn-sm{background:rgba(255,255,255,0.2);color:#fff;border:none;font-size:14px;width:24px;height:24px;padding:0;border-radius:var(--radius-sm)}
+#layers-panel-header h3{font-size:13px;margin:0;color:var(--gold);font-weight:700;letter-spacing:0.03em;border:none;padding:0;text-transform:none;text-shadow:0 1px 2px rgba(0,0,0,0.2)}
+#layers-panel-header .btn-sm{background:rgba(255,255,255,0.2);color:#fff;border:none;font-size:14px;width:26px;height:26px;padding:0;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;transition:background 0.2s}
 #layers-panel-header .btn-sm:hover{background:rgba(255,255,255,0.35)}
 #layers-panel-content{padding:0;overflow-y:auto;flex:1}
 .layer-section{padding:10px 14px;border-bottom:1px solid var(--border)}
-.layer-section h4{margin:0 0 8px 0;font-size:10px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.06em}
+.layer-section:last-child{border-bottom:none}
+.layer-section h4{margin:0 0 8px 0;font-size:10px;font-weight:700;color:var(--scarlet);text-transform:uppercase;letter-spacing:0.06em}
 .layer-toggle{display:flex;justify-content:space-between;align-items:center;text-transform:none;font-weight:normal;font-size:12px;cursor:pointer;padding:3px 0}
+/* Custom checkbox toggle for layers panel */
+.lp-check{-webkit-appearance:none;-moz-appearance:none;appearance:none;width:18px;height:18px;min-width:18px;border:2px solid #999;border-radius:4px;background:#fff;cursor:pointer;position:relative;flex-shrink:0;margin:0;transition:all .15s ease}
+.lp-check:checked{background:var(--scarlet);border-color:var(--scarlet)}
+.lp-check:checked::after{content:'';position:absolute;left:4px;top:1px;width:6px;height:10px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.lp-check:hover{border-color:var(--scarlet)}
+.lp-check:focus{outline:2px solid rgba(198,40,40,0.3);outline-offset:1px}
+/* LEGEND PANEL (Simbología flotante) */
+#legend-panel{position:absolute;bottom:50px;left:16px;width:220px;background:var(--surface);border-radius:var(--radius);z-index:1500;border:1px solid var(--border);box-shadow:var(--shadow-lg);overflow:hidden;transition:all .3s ease}
+#legend-panel.collapsed #legend-body{display:none}
+#legend-panel.hidden{display:none}
+#legend-header{padding:8px 12px;background:var(--scarlet);border-bottom:none;display:flex;justify-content:space-between;align-items:center;cursor:pointer;font-size:11px;font-weight:700;color:#fff;text-transform:uppercase;letter-spacing:0.04em}
+#legend-header:hover{background:var(--scarlet-dark)}
+#legend-body{padding:8px 12px;max-height:300px;overflow-y:auto}
+#legend-body img{max-width:100%;height:auto}
+.legend-layer-item{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px}
+.legend-swatch{width:14px;height:14px;border-radius:3px;border:1px solid var(--border);flex-shrink:0}
 /* PANELS */
 .panel{display:none}.panel.active{display:block}
 .report-section{margin-bottom:24px}
@@ -197,16 +214,33 @@ textarea{resize:vertical;min-height:80px;font-family:var(--font-mono)}
                     <polyline points="8 20 4 20 4 16"/>
                 </svg>
             </button>
+            <!-- Simbología -->
+            <button class="map-btn" onclick="toggleLegendPanel()" title="Simbología">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="3" y="3" width="7" height="7" rx="1"/>
+                    <rect x="14" y="3" width="7" height="7" rx="1"/>
+                    <rect x="3" y="14" width="7" height="7" rx="1"/>
+                    <rect x="14" y="14" width="7" height="7" rx="1"/>
+                </svg>
+            </button>
         </div>
         <div id="layers-panel" class="hidden">
             <div id="layers-panel-header">
-                <h3 style="font-size:12px; margin:0;">Capas del Mapa</h3>
+                <h3>Gestión de Capas</h3>
                 <button class="btn-sm" onclick="toggleLayersPanel()" title="Cerrar"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
             </div>
             <div style="padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--surface-2);">
                 <input type="text" id="layer-search" placeholder="Buscar capa..." onkeyup="filterLayers(this.value)" style="padding: 6px 10px; font-size: 11px;">
             </div>
             <div id="layers-panel-content"></div>
+        </div>
+        <!-- Simbología flotante -->
+        <div id="legend-panel" class="hidden">
+            <div id="legend-header" onclick="toggleLegendCollapse()">
+                <span>Simbología</span>
+                <span id="legend-chevron" style="font-size:14px;">&#9662;</span>
+            </div>
+            <div id="legend-body"></div>
         </div>
     </div>
     <div id="status-bar">
@@ -360,7 +394,7 @@ textarea{resize:vertical;min-height:80px;font-family:var(--font-mono)}
 
       <div id="panel-info" class="panel">
           <div class="card" style="text-align:center; padding:28px 20px;">
-              <img class="brand-logo" src="" id="info-logo" alt="Logo COBERTURA CR" style="width:80px; height:80px; margin:0 auto 16px; display:block;" src="data:image/jpeg;base64,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">
+              <img class="brand-logo" id="info-logo" alt="Logo COBERTURA CR" style="width:80px; height:80px; margin:0 auto 16px; display:block; border-color:var(--border);">
               <h2 style="font-size:18px; font-weight:700; color:var(--primary); margin-bottom:4px;">COBERTURA CR</h2>
               <div style="font-size:11px; color:var(--text-muted); margin-bottom:16px;">Motor de Análisis Espacial de Cobertura Forestal</div>
               <div style="font-size:12px; color:var(--text-muted); margin-bottom:4px;">Versión <b style="color:var(--primary);">7.3</b></div>
@@ -368,9 +402,10 @@ textarea{resize:vertical;min-height:80px;font-family:var(--font-mono)}
           <div class="card">
               <h3>Información de la Herramienta</h3>
               <div style="font-size:12px; line-height:1.7; color:var(--text-main);">
-                  <p style="margin-bottom:12px;">Herramienta digital de análisis de cobertura forestal desarrollada para el <b>Sistema Nacional de Áreas de Conservación (SINAC)</b> de Costa Rica.</p>
-                  <p style="margin-bottom:12px;">Permite importar, dibujar o pegar coordenadas de puntos, líneas y polígonos para determinar el tipo de cobertura forestal según las capas oficiales de FONAFIFO y el Plan Nacional de Estadísticas (PNE).</p>
-                  <p style="margin-bottom:12px;">El motor de análisis combina <b>intersección geométrica JSTS</b> para capas rápidas y <b>análisis raster WMS</b> para capas lentas, con fallback automático a grilla adaptativa.</p>
+                  <p style="margin-bottom:12px;">Cobertura CR es un innovador motor de análisis espacial diseñado para conectar de manera inmediata la información recabada en el campo con la cartografía oficial del país. Su propósito principal es automatizar el cruce de datos geográficos, permitiendo identificar de forma instantánea y precisa la cobertura forestal y el uso del suelo en cualquier punto o trayecto del territorio nacional, directamente desde un navegador web y sin necesidad de software complejo.</p>
+                  <p style="margin-bottom:12px;">La implementación de esta tecnología representa un salto cualitativo en la forma de procesar la información técnica y ambiental. Al sustituir horas de tediosos análisis manuales y descarga de archivos pesados por un sistema automatizado, se garantiza que cada evaluación se realice bajo un mismo estándar riguroso. Esto no solo reduce al mínimo el margen de error, sino que libera tiempo valioso para enfocar los esfuerzos en el análisis estratégico y en el trabajo de campo.</p>
+                  <p style="margin-bottom:12px;">Contar con una plataforma unificada transforma por completo la dinámica de respuesta y la eficiencia de los procesos. La capacidad de generar reportes estandarizados y verificables en cuestión de segundos agiliza los trámites operativos y optimiza significativamente el uso de los recursos técnicos disponibles. Esta modernización se traduce en flujos de trabajo más ágiles, respaldados por datos consistentes que fundamentan una toma de decisiones más segura, técnica y transparente.</p>
+                  <p style="margin-bottom:12px;">Finalmente, la agilización de estos análisis espaciales tiene un impacto directo y positivo en el desarrollo productivo y sostenible del país. Al reducir drásticamente los tiempos de espera y establecer criterios de evaluación claros y uniformes, se brinda mayor seguridad y previsibilidad a las iniciativas privadas, proyectos de infraestructura y actividades productivas. Es un avance clave hacia un modelo donde el progreso económico, el aprovechamiento responsable y la conservación avanzan de la mano, con reglas claras para todos.</p>
                   <div style="background:var(--primary-light); border-radius:var(--radius); padding:14px; margin:16px 0;">
                       <div style="font-size:11px; font-weight:700; color:var(--primary); text-transform:uppercase; margin-bottom:8px;">Capas Disponibles</div>
                       <div style="font-size:11px; color:var(--text-main); line-height:1.8;">
@@ -457,6 +492,10 @@ const DPI = 96;
 document.addEventListener('DOMContentLoaded', () => {
     initMap(); initTheme(); renderConfig(); loadDataFromStorage(); renderWizard();
     initResizer(); initScaleInput(); updateAnalyzeButton();
+    // Copiar logo del header al panel Info
+    const headerLogo = document.querySelector('.brand-logo');
+    const infoLogo = document.getElementById('info-logo');
+    if (headerLogo && infoLogo) infoLogo.src = headerLogo.src;
     document.addEventListener('keydown', (e) => {
         if (!appState.isDrawing) return;
         if (e.key === 'Escape') cancelGeometry();
@@ -470,8 +509,8 @@ document.addEventListener('DOMContentLoaded', () => {
 function initMap() {
     map = L.map('map', { zoomControl: false }).setView([9.95, -84.1], 8);
     L.control.zoom({ position: 'topright' }).addTo(map);
-    
-    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:22, attribution:'Esri'});
+
+    const satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:22, attribution:'Esri', zIndex:1});
     satellite.addTo(map);
 
     layers.points = L.featureGroup().addTo(map); 
@@ -484,34 +523,36 @@ function initMap() {
     updateMapWmsLayers();
 
     // ====== CAPAS DE REFERENCIA CARTOGRÁFICA ======
-    // Proxy base para WMS de SNIT/SIRI (redirigir tiles a través del worker)
-    const proxyWms = (baseUrl) => baseUrl; // WMS tiles cargan directo (imágenes, no JSON)
+    // zIndex controla el apilamiento dentro de tilePane:
+    //   Coberturas WMS: 100 (abajo) — ver updateMapWmsLayers()
+    //   Referencias (drenaje/vías/catastro): 200 (encima de coberturas)
+    //   Etiquetas CARTO: 300 (encima de todo)
+    // Datos del usuario (overlayPane z=400 / markerPane z=600) siempre arriba.
 
     // Cauce y drenaje – IGN 1:25000
     refLayers.drenaje = L.tileLayer.wms('https://geos.snitcr.go.cr/be/IGN_25/wms', {
         layers: 'IGN_25:rios_dobles,IGN_25:rios_simples,IGN_25:quebradas',
-        format: 'image/png', transparent: true, opacity: 0.85, maxZoom: 22
+        format: 'image/png', transparent: true, opacity: 0.85, maxZoom: 22, zIndex: 200
     });
 
     // Vías públicas – SIRI
     refLayers.vias = L.tileLayer.wms('https://siri.snitcr.go.cr/Geoservicios/wms', {
         layers: 'Red_vial_nacional',
-        format: 'image/png', transparent: true, opacity: 0.8, maxZoom: 22
+        format: 'image/png', transparent: true, opacity: 0.8, maxZoom: 22, zIndex: 200
     });
 
     // Etiquetas de lugares – CARTO labels
     refLayers.etiquetas = L.tileLayer('https://{s}.basemaps.cartocdn.com/light_only_labels/{z}/{x}/{y}{r}.png', {
-        maxZoom: 22, opacity: 0.9, attribution: 'CARTO'
+        maxZoom: 22, opacity: 0.9, attribution: 'CARTO', zIndex: 300
     });
 
-    // Agrupar: Etiquetas Cartográficas (drenaje + vías + etiquetas)
-    refLayers.cartoGroup = L.layerGroup([refLayers.etiquetas]);
-    refLayers.cartoGroup.addTo(map); // Etiquetas activas por defecto
+    // Etiquetas activas por defecto
+    refLayers.etiquetas.addTo(map);
 
     // Registro Inmobiliario – SIRI (Zonas catastrales)
     refLayers.catastro = L.tileLayer.wms('https://siri.snitcr.go.cr/Geoservicios/wms', {
         layers: 'catastro_zona_maritimo_terrestre,planos_catastro',
-        format: 'image/png', transparent: true, opacity: 0.6, maxZoom: 22
+        format: 'image/png', transparent: true, opacity: 0.6, maxZoom: 22, zIndex: 200
     });
 
     map.on('click', onMapClick); 
@@ -611,9 +652,9 @@ function renderLayersPanel() {
         const div = document.createElement('div');
         div.className = 'layer-item';
         div.style.marginBottom = '8px';
-        div.innerHTML = `<label style="display:flex; justify-content:space-between; text-transform:none; font-weight:normal; font-size:12px;">
+        div.innerHTML = `<label class="layer-toggle">
             <span>${c.name}</span>
-            <input type="checkbox" ${map.hasLayer(layer) ? 'checked' : ''} onchange="toggleWms('${c.id}', this.checked)">
+            <input type="checkbox" class="lp-check" ${map.hasLayer(layer) ? 'checked' : ''} onchange="toggleWms('${c.id}', this.checked)">
         </label>`;
         wmsSec.appendChild(div);
     });
@@ -631,13 +672,10 @@ function renderLayersPanel() {
         const count = data[ul.dataKey].length;
         const div = document.createElement('div');
         div.className = 'layer-item';
-        div.style.marginBottom = '8px';
-        div.style.display = 'flex';
-        div.style.justifyContent = 'space-between';
-        div.style.alignItems = 'center';
-        let inner = `<label style="display:flex; justify-content:space-between; align-items:center; text-transform:none; font-weight:normal; font-size:12px; flex:1;">
+        div.style.cssText = 'margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;';
+        let inner = `<label class="layer-toggle" style="flex:1;">
             <span>${ul.name}</span>
-            <input type="checkbox" ${map.hasLayer(ul.layer) ? 'checked' : ''} onchange="toggleUserLayer('${ul.key}', this.checked)" style="width:auto;">
+            <input type="checkbox" class="lp-check" ${map.hasLayer(ul.layer) ? 'checked' : ''} onchange="toggleUserLayer('${ul.key}', this.checked)">
         </label>`;
         if (count > 0) {
             inner += `<button class="btn-danger btn-icon-only btn-sm" onclick="deleteEntireLayer('${ul.dataKey}'); renderLayersPanel();" title="Eliminar capa completa" style="margin-left:6px; flex-shrink:0;"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg></button>`;
@@ -647,9 +685,9 @@ function renderLayersPanel() {
     });
     container.appendChild(userSec);
 
-    // — Sección: Etiquetas Cartográficas (grupo) —
+    // — Sección: Referencias Cartográficas —
     const refSec = document.createElement('div'); refSec.className = 'layer-section';
-    refSec.innerHTML = '<h4>Etiquetas Cartográficas</h4>';
+    refSec.innerHTML = '<h4>Referencias Cartográficas</h4>';
     const refItems = [
         { name: 'Etiquetas de Lugares', key: 'etiquetas', layer: refLayers.etiquetas },
         { name: 'Cauce y Drenaje (IGN 1:25k)', key: 'drenaje', layer: refLayers.drenaje },
@@ -660,7 +698,7 @@ function renderLayersPanel() {
         div.className = 'layer-item';
         div.style.marginBottom = '6px';
         div.innerHTML = `<label class="layer-toggle"><span>${ri.name}</span>
-            <input type="checkbox" ${map.hasLayer(ri.layer) ? 'checked' : ''} onchange="toggleRefLayer('${ri.key}', this.checked)" style="width:auto;">
+            <input type="checkbox" class="lp-check" ${map.hasLayer(ri.layer) ? 'checked' : ''} onchange="toggleRefLayer('${ri.key}', this.checked)">
         </label>`;
         refSec.appendChild(div);
     });
@@ -673,7 +711,7 @@ function renderLayersPanel() {
     catDiv.className = 'layer-item';
     catDiv.style.marginBottom = '6px';
     catDiv.innerHTML = `<label class="layer-toggle"><span>Catastro (Zonas SIRI)</span>
-        <input type="checkbox" ${map.hasLayer(refLayers.catastro) ? 'checked' : ''} onchange="toggleRefLayer('catastro', this.checked)" style="width:auto;">
+        <input type="checkbox" class="lp-check" ${map.hasLayer(refLayers.catastro) ? 'checked' : ''} onchange="toggleRefLayer('catastro', this.checked)">
     </label>`;
     catSec.appendChild(catDiv);
     container.appendChild(catSec);
@@ -686,6 +724,7 @@ function toggleRefLayer(key, visible) {
     const lyr = refLayers[key];
     if (!lyr) return;
     if (visible) { map.addLayer(lyr); } else { map.removeLayer(lyr); }
+    if (!document.getElementById('legend-panel').classList.contains('hidden')) updateLegendPanel();
 }
 function filterLayers(text) {
     const term = text.toLowerCase();
@@ -693,6 +732,90 @@ function filterLayers(text) {
         el.style.display = el.innerText.toLowerCase().includes(term) ? 'block' : 'none';
     });
 }
+
+// ========== LEGEND PANEL (Simbología) ==========
+function toggleLegendPanel() {
+    const panel = document.getElementById('legend-panel');
+    if (!panel) return;
+    panel.classList.toggle('hidden');
+    if (!panel.classList.contains('hidden')) {
+        updateLegendPanel();
+    }
+}
+
+function toggleLegendCollapse() {
+    const panel = document.getElementById('legend-panel');
+    if (!panel) return;
+    panel.classList.toggle('collapsed');
+    const chevron = document.getElementById('legend-chevron');
+    if (chevron) {
+        chevron.innerHTML = panel.classList.contains('collapsed') ? '&#9656;' : '&#9662;';
+    }
+}
+
+function updateLegendPanel() {
+    const body = document.getElementById('legend-body');
+    if (!body) return;
+    body.innerHTML = '';
+
+    // — Sección 1: Capas WMS activas (GetLegendGraphic) —
+    let hasWmsLegend = false;
+    config.forEach(c => {
+        if (!c.enabled) return;
+        const layer = activeWmsLayers[c.id];
+        if (!layer || !map.hasLayer(layer)) return;
+        hasWmsLegend = true;
+        const wmsUrl = c.wfs.endsWith('/wfs') ? c.wfs.substring(0, c.wfs.length - 4) + '/wms' : c.wfs;
+        const legendUrl = wmsUrl + '?SERVICE=WMS&VERSION=1.1.1&REQUEST=GetLegendGraphic&LAYER=' + encodeURIComponent(c.type) + '&FORMAT=image/png&WIDTH=20&HEIGHT=20&LEGEND_OPTIONS=fontAntiAliasing:true;fontSize:10;forceLabels:on';
+        const section = document.createElement('div');
+        section.style.cssText = 'margin-bottom:8px;';
+        section.innerHTML = '<div style="font-size:10px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.04em; margin-bottom:4px;">' + c.name + '</div>';
+        const img = document.createElement('img');
+        img.src = legendUrl;
+        img.alt = 'Leyenda ' + c.name;
+        img.style.cssText = 'max-width:100%; height:auto; border:1px solid var(--border); border-radius:4px; background:#fff;';
+        img.onerror = function() { this.style.display = 'none'; this.parentNode.innerHTML += '<div style="font-size:10px; color:var(--text-muted); font-style:italic;">Leyenda no disponible</div>'; };
+        section.appendChild(img);
+        body.appendChild(section);
+    });
+
+    // — Sección 2: Capas de usuario cargadas (solo Puntos y Líneas) —
+    const userItems = [
+        { name: 'Puntos', layer: layers.points, color: '#C62828', dataKey: 'points' },
+        { name: 'Líneas', layer: layers.lines, color: '#1565C0', dataKey: 'lines' }
+    ];
+    let hasUserLayers = false;
+    userItems.forEach(u => {
+        if (!data[u.dataKey] || data[u.dataKey].length === 0) return;
+        hasUserLayers = true;
+        const div = document.createElement('div');
+        div.className = 'legend-layer-item';
+        div.innerHTML = '<span class="legend-swatch" style="background:' + u.color + ';"></span><span>' + u.name + ' (' + data[u.dataKey].length + ')</span>';
+        body.appendChild(div);
+    });
+
+    // — Sección 3: Capas de referencia activas (sin Etiquetas de Lugares) —
+    const refItems = [
+        { name: 'Cauce y Drenaje', key: 'drenaje', color: '#0288D1' },
+        { name: 'Vías Públicas', key: 'vias', color: '#6D4C41' },
+        { name: 'Catastro', key: 'catastro', color: '#7B1FA2' }
+    ];
+    let hasRefLayers = false;
+    refItems.forEach(ri => {
+        const lyr = refLayers[ri.key];
+        if (!lyr || !map.hasLayer(lyr)) return;
+        hasRefLayers = true;
+        const div = document.createElement('div');
+        div.className = 'legend-layer-item';
+        div.innerHTML = '<span class="legend-swatch" style="background:' + ri.color + ';opacity:0.6;"></span><span>' + ri.name + '</span>';
+        body.appendChild(div);
+    });
+
+    if (!hasWmsLegend && !hasUserLayers && !hasRefLayers) {
+        body.innerHTML = '<div style="font-size:11px; color:var(--text-muted); font-style:italic; padding:8px 0;">No hay capas visibles actualmente.</div>';
+    }
+}
+// ========== FIN LEGEND PANEL ==========
 
 function updateActiveLayerLabel(id) {
     const labelEl = document.getElementById('active-layer-name');
@@ -725,6 +848,7 @@ window.toggleWms = (id, active) => {
         updateActiveLayerLabel(null);
     }
     renderLayersPanel(); // Actualiza la vista de checkboxes
+    if (!document.getElementById('legend-panel').classList.contains('hidden')) updateLegendPanel();
 };
 
 function updateMapWmsLayers() { 
@@ -735,7 +859,7 @@ function updateMapWmsLayers() {
         }
         if (!activeWmsLayers[c.id]) {
             let wmsUrl = c.wfs.endsWith('/wfs') ? c.wfs.substring(0, c.wfs.length - 4) + '/wms' : c.wfs;
-            activeWmsLayers[c.id] = L.tileLayer.wms(wmsUrl, { layers: c.type, format: 'image/png', transparent: true, opacity: 0.75 });
+            activeWmsLayers[c.id] = L.tileLayer.wms(wmsUrl, { layers: c.type, format: 'image/png', transparent: true, opacity: 0.75, zIndex: 100 });
             // Se elimina la adición automática para que salgan desactivadas por defecto
         }
     }); 
