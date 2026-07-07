@@ -1,0 +1,87 @@
+name: Descargar curvas SNIT 1-5000
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WFS_URL: https://geos.snitcr.go.cr/be/IGN_5/wfs
+  WFS_LAYER: IGN_5:curvas_5000
+  OUTPUT_DIR: salida_snit
+  OUTPUT_GPKG: salida_snit/curvas_nivel_10m_5000_Costa_Rica_EPSG5367.gpkg
+
+jobs:
+  descargar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - name: Preparar herramientas
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gdal-bin sqlite3
+          ogr2ogr --version
+
+      - name: Consultar servicio WFS
+        run: |
+          set -euxo pipefail
+          mkdir -p "$OUTPUT_DIR"
+          ogrinfo \
+            --config GDAL_HTTP_TIMEOUT 600 \
+            --config GDAL_HTTP_MAX_RETRY 10 \
+            --config GDAL_HTTP_RETRY_DELAY 5 \
+            --config OGR_WFS_PAGING_ALLOWED YES \
+            --config OGR_WFS_PAGE_SIZE 10000 \
+            -ro -so \
+            "WFS:${WFS_URL}?VERSION=2.0.0" \
+            "$WFS_LAYER" | tee "$OUTPUT_DIR/informacion_capa_antes.txt"
+
+      - name: Descargar a GeoPackage CRTM05
+        run: |
+          set -euxo pipefail
+          ogr2ogr \
+            --config GDAL_HTTP_TIMEOUT 600 \
+            --config GDAL_HTTP_MAX_RETRY 10 \
+            --config GDAL_HTTP_RETRY_DELAY 5 \
+            --config OGR_WFS_PAGING_ALLOWED YES \
+            --config OGR_WFS_PAGE_SIZE 10000 \
+            --config CPL_VSIL_CURL_ALLOWED_EXTENSIONS .xml,.gml,.json \
+            -f GPKG \
+            "$OUTPUT_GPKG" \
+            "WFS:${WFS_URL}?VERSION=2.0.0" \
+            "$WFS_LAYER" \
+            -nln curvas_nivel_10m_5000 \
+            -t_srs EPSG:5367 \
+            -gt 65536 \
+            -lco SPATIAL_INDEX=YES \
+            -progress
+
+      - name: Verificar y documentar resultado
+        run: |
+          set -euxo pipefail
+          ogrinfo -ro -so "$OUTPUT_GPKG" curvas_nivel_10m_5000 | tee "$OUTPUT_DIR/informacion_capa_descargada.txt"
+          sha256sum "$OUTPUT_GPKG" | tee "$OUTPUT_DIR/SHA256SUMS.txt"
+          du -h "$OUTPUT_GPKG" | tee "$OUTPUT_DIR/tamano_archivo.txt"
+          cat > "$OUTPUT_DIR/LEAME.txt" <<'EOF'
+          Capa: Curvas de Nivel 10 m (cartografia IGN 1:5000)
+          Fuente oficial: Instituto Geografico Nacional / SNIT Costa Rica
+          Servicio WFS: https://geos.snitcr.go.cr/be/IGN_5/wfs
+          Nombre WFS: IGN_5:curvas_5000
+          Formato de salida: GeoPackage
+          Capa interna: curvas_nivel_10m_5000
+          Sistema de referencia: CR05 / CRTM05, EPSG:5367
+          Intervalo: curvas intermedias cada 10 m y curvas indice cada 50 m, segun metadatos oficiales.
+          Condicion de uso: uso libre y gratuito citando el origen y la propiedad de los datos.
+          EOF
+
+      - name: Publicar archivo descargable
+        uses: actions/upload-artifact@v4
+        with:
+          name: curvas-nivel-10m-5000-Costa-Rica-EPSG5367
+          path: salida_snit/
+          compression-level: 6
+          retention-days: 7
+          if-no-files-found: error
